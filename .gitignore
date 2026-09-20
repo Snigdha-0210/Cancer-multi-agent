@@ -1,22 +1,29 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
 *$py.class
 
-# Virtual environments
-venv/
+# Virtual environment
 .venv/
+venv/
 env/
 ENV/
 env.bak/
 venv.bak/
 
-# Environment Variables & Secrets
+# Environment variables / secrets
 .env
 .env.local
 *.secret
 
-# IDE and Editors
+# Processed data
+data/processed/
+
+# Faculty PDFs
+data/raw_pdfs/*.pdf
+
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -31,9 +38,9 @@ yarn-error.log*
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# OS generated files
+# OS
+.DS_Store
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-.DS_Store

@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 
 
-# Load variables from .env
 load_dotenv()
 
 
@@ -15,4 +14,3 @@ if not OPENAI_API_KEY:
         "OPENAI_API_KEY is not set. "
         "Create a .env file in the project root and add your API key."
     )
-    

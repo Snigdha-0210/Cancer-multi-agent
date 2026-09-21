@@ -22,6 +22,8 @@ data/processed/*
 !data/processed/.gitkeep
 data/raw_pdfs/*
 !data/raw_pdfs/.gitkeep
+data/qdrant/*
+!data/qdrant/.gitkeep
 data/vector_store/
 *.pdf
 

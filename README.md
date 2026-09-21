@@ -43,6 +43,7 @@
   - [Pipeline Processing Stages](#pipeline-processing-stages)
 - [💾 Vector Database & Retrieval Layer](#-vector-database--retrieval-layer)
 - [⚖️ Synthesis & Verification Engine](#️-synthesis--verification-engine)
+  - [Verification & Revision Loop](#verification--revision-loop)
 - [📊 Evaluation & Grounding Benchmarks](#-evaluation--grounding-benchmarks)
 - [📂 Repository Structure](#-repository-structure)
 - [⚙️ Quickstart Guide](#️-quickstart-guide)
@@ -71,7 +72,7 @@ Oncological decision-support involves navigating vast, complex, and rapidly evol
 The **Cancer Multi-Agent System** structures clinical AI assistance into a stateful, compiled **LangGraph** execution workflow:
 1. **Deterministic Safety-First Triage**: Intercepts crises and self-harm keywords before normal processing.
 2. **Temporal Grounding**: Separates historical institutional knowledge (e.g. 2010/2018 guidelines) from real-time external research (e.g. 2026 FDA approvals).
-3. **Dual-Layer Validation**: Passes all synthesized responses through an independent Verification Agent that evaluates factual claims against retrieved evidence with strict `PASS`, `FAIL`, or `REVISE` verdicts.
+3. **Dual-Layer Validation & Self-Correction**: Passes all synthesized responses through an independent Verification Agent that evaluates factual claims against retrieved evidence with strict `PASS`, `FAIL`, or `REVISE` feedback loops.
 
 <div align="center">
   <img src="assets/virtual-tumor-board.jpg" alt="Virtual Tumor Board Command Center" width="85%" style="border-radius: 8px; margin: 20px 0;" />
@@ -93,7 +94,8 @@ flowchart TD
     classDef resStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#fff
     classDef synthStyle fill:#312e81,stroke:#a855f7,stroke-width:2px,color:#fff
     classDef verifStyle fill:#c2410c,stroke:#f97316,stroke-width:2px,color:#fff
-    classDef outStyle fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef finalStyle fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    classDef outStyle fill:#047857,stroke:#34d399,stroke-width:2px,color:#fff
 
     Start([🟢 START]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
     
@@ -115,8 +117,11 @@ flowchart TD
     
     SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code>]:::verifStyle
 
-    VerifierNode -->|Verdict: PASS| OutputVerified([🏁 END: Verified Answer + Evidence]):::outStyle
-    VerifierNode -->|Verdict: FAIL / REVISE| OutputFail([🏁 END: Failed Verification Audit]):::outStyle
+    VerifierNode -->|Verdict: PASS| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code>]:::finalStyle
+    VerifierNode -.->|Verdict: FAIL &lt; 2 Attempts| ResearchNode
+    VerifierNode -->|Attempts &ge; 2| FinalNode
+
+    FinalNode --> End([🏁 END: Output Response + Sources]):::outStyle
 ```
 
 ---
@@ -132,7 +137,8 @@ Every agent is engineered with a strict domain boundary, typed Pydantic models, 
 | **📚 Faculty RAG Agent** | `backend/rag/rag_agent.py`<br>`backend/graph/rag_node.py` | Queries local persistent Qdrant database, extracts semantic chunks, attributes page-level citations, and flags historical publication years (e.g. 2010/2018). | Local Qdrant Store (`cancer_faculty_knowledge`) |
 | **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/graph/research_node.py` | Researches emerging oncology updates, newly approved 2026 therapies, and official regulatory changes with strict source date verification. | Live Web Tools + FDA, NCI, NIH, CDC Databases |
 | **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Consolidates multi-source evidence into a cohesive, patient-friendly answer; explicitly highlights temporal differences and caveats without diagnosing or prescribing. | Provided Faculty RAG & External Research Evidence Only |
-| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Independently verifies proposed answers against supplied evidence, flags unsupported claims or omitted limitations, and issues structured `PASS`/`FAIL`/`REVISE` verdicts. | Raw Evidence Claims & Source Metadata |
+| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Independently verifies proposed answers against supplied evidence, flags unsupported claims or omitted limitations, and controls the retry loop. | Raw Evidence Claims & Source Metadata |
+| **📋 Final Response Builder** | `backend/graph/final_node.py` | Aggregates final formatted text, trace history of agents used, verification audit results, and deduplicated source citations. | Global `AgentState` |
 
 ---
 
@@ -163,10 +169,11 @@ sequenceDiagram
     participant Research as 🌐 Research Agent
     participant Synth as ⚖️ Synthesis Node
     participant Verifier as 🔍 Verification Node
+    participant Final as 📋 Final Node
 
     User->>Router: "What is the latest FDA-approved treatment for melanoma in 2026?"
     
-    Note over Router: Deterministic screen: No self-harm/emergency<br/>LLM Triage: faculty_rag=True, current_research=True, synthesis=True, verification=True
+    Note over Router: Deterministic screen: Safe<br/>LLM Triage: faculty_rag=True, current_research=True, synthesis=True, verification=True
 
     par Parallel Evidence Collection
         Router->>RAG: Retrieve historical context from Qdrant
@@ -180,9 +187,17 @@ sequenceDiagram
     Note over Synth: Synthesize answer distinguishing 2010 textbook context from 2026 FDA approval
 
     Synth->>Verifier: Submit proposed answer + raw evidence
-    Note over Verifier: Audit factual claims against FDA release & trial eligibility<br/>Verdict: PASS (Confidence: HIGH)
-
-    Verifier-->>User: Final Verified Answer + Timestamps + Citations
+    
+    alt Audit PASS
+        Verifier->>Final: Verdict PASS
+        Final-->>User: Final Answer + Agents Used + Deduplicated Sources
+    else Audit FAIL & Attempts < 2
+        Verifier->>Research: Request Targeted Evidence Revision
+        Research->>Synth: Updated Evidence
+        Synth->>Verifier: Revised Formulation
+        Verifier->>Final: Verdict PASS
+        Final-->>User: Final Verified Answer
+    end
 ```
 
 ---
@@ -268,9 +283,10 @@ data/qdrant/
 - Explicitly warns when faculty knowledge reflects historical standards of care (e.g. 2010) that have since been superseded.
 - Never diagnoses or prescribes.
 
-### Verification Agent (`verifier_agent.py` / `verification_node.py`)
+### Verification Agent & Revision Loop (`verifier_agent.py` / `verification_node.py`)
 - Evaluates the proposed text against raw retrieved context.
-- Generates structured verification outputs:
+- Configured with `MAX_VERIFICATION_ATTEMPTS = 2` to trigger automatic research loops if evidence is missing.
+- Structured verification outputs:
 ```
 VERDICT: PASS
 CONFIDENCE: HIGH
@@ -322,16 +338,19 @@ cancer-multi-agent/
 │   ├── graph/                          # LangGraph Nodes & Compiled StateGraph
 │   │   ├── state.py                    # Shared AgentState TypedDict definition
 │   │   ├── workflow.py                 # Compiled StateGraph workflow orchestrator
+│   │   ├── final_node.py               # Final response aggregator & citation builder
 │   │   ├── router_node.py              # Routing node execution
 │   │   ├── emergency_node.py           # Safety intercept execution node
 │   │   ├── rag_node.py                 # Faculty RAG node execution
 │   │   ├── research_node.py            # External research node execution
 │   │   ├── synthesis_node.py           # Synthesis node execution
-│   │   ├── verification_node.py        # Verification node execution
+│   │   ├── verification_node.py        # Verification node execution with attempt counter
 │   │   ├── emergency_node_test_offline.py # Offline deterministic safety test
 │   │   ├── rag_node_test_offline.py    # Offline RAG node test
 │   │   ├── research_node_test_offline.py  # Offline research node test
-│   │   └── research_pipeline_test.py   # Multi-agent research pipeline test
+│   │   ├── research_pipeline_test.py   # Multi-agent research pipeline test
+│   │   ├── verification_retry_test_offline.py # Verification retry loop test
+│   │   └── workflow_final_test_offline.py     # End-to-end offline StateGraph test
 │   │
 │   ├── safety/                         # Safety rules & deterministic engines
 │   │   └── emergency_rules.py          # Regex patterns for crisis detection
@@ -421,8 +440,11 @@ python -m backend.rag.qdrant_store
 ### 4. Executing the Compiled LangGraph Workflow
 
 ```bash
-# Test the compiled multi-agent StateGraph workflow
+# Inspect compiled multi-agent StateGraph workflow
 python -m backend.graph.workflow
+
+# Run full end-to-end offline multi-agent workflow test
+python -m backend.graph.workflow_final_test_offline
 ```
 
 ### 5. Testing Individual Nodes & Offline Safety
@@ -480,11 +502,19 @@ curl -X POST "http://127.0.0.1:8000/ask" \
 {
   "question": "What are the risk factors for melanoma?",
   "answer": "According to faculty oncology guidelines, major risk factors for melanoma include extensive ultraviolet (UV) radiation exposure, history of severe sunburns, fair skin phenotype (Fitzpatrick skin types I-II), high melanocytic nevus counts, presence of atypical dysplastic nevi, and family history of melanoma...",
+  "verification_status": "PASS",
+  "agents_used": [
+    "router",
+    "faculty_rag",
+    "synthesis",
+    "verification",
+    "final"
+  ],
   "sources": [
     {
-      "document": "managing-skin-cancer-2010.pdf",
-      "pages": "12-15",
-      "source_year": 2010
+      "title": "A Practical Guide to Skin Cancer",
+      "page": 25,
+      "source_type": "faculty_knowledge"
     }
   ]
 }
@@ -512,8 +542,9 @@ curl -X POST "http://127.0.0.1:8000/ask" \
   - [x] Multi-source consensus synthesis agent (`synthesis_agent.py`).
   - [x] Independent verification & hallucination auditing agent (`verifier_agent.py`).
 - [x] **Phase 4: Compiled LangGraph StateGraph Execution**
-  - [x] Compiled `StateGraph` linking Router, Emergency, RAG, Research, Synthesis, and Verification (`backend/graph/workflow.py`).
-  - [x] Conditional edge routing based on triage decisions and verification audit status.
+  - [x] Compiled `StateGraph` linking Router, Emergency, RAG, Research, Synthesis, Verification, and Final nodes (`backend/graph/workflow.py`).
+  - [x] Verification retry & revision loop (`MAX_VERIFICATION_ATTEMPTS = 2`).
+  - [x] Full offline end-to-end integration test runner (`backend/graph/workflow_final_test_offline.py`).
 - [ ] **Phase 5: Clinician Interface & Automated Benchmarking**
   - [ ] Web-based Virtual Tumor Board review dashboard.
   - [ ] Automated evaluation test suite with NCBI PMID validator (`tests/eval_citations.py`).

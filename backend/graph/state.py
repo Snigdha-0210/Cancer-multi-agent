@@ -2,37 +2,63 @@ from typing import Any, TypedDict
 
 
 class AgentState(TypedDict, total=False):
-    """
-    Shared state passed between agents in the LangGraph workflow.
-    """
+    # ---------------------------------------------------------
+    # USER INPUT
+    # ---------------------------------------------------------
 
-    # Original user message
     question: str
 
-    # Router/Triage decision
+    # ---------------------------------------------------------
+    # ROUTER
+    # ---------------------------------------------------------
+
     route: dict[str, Any]
 
-    # Faculty RAG evidence and answer
+    # ---------------------------------------------------------
+    # FACULTY RAG
+    # ---------------------------------------------------------
+
     faculty_evidence: str
     faculty_sources: list[dict[str, Any]]
 
-    # Current external research
+    # ---------------------------------------------------------
+    # CURRENT EXTERNAL RESEARCH
+    # ---------------------------------------------------------
+
     research_evidence: str
     research_sources: list[dict[str, Any]]
 
-    # Emergency/Safety result
+    # ---------------------------------------------------------
+    # EMERGENCY / SAFETY
+    # ---------------------------------------------------------
+
     emergency_response: str
     emergency_type: str
 
-    # Proposed combined answer
+    # ---------------------------------------------------------
+    # SYNTHESIS
+    # ---------------------------------------------------------
+
     proposed_answer: str
 
-    # Verification result
+    # ---------------------------------------------------------
+    # VERIFICATION
+    # ---------------------------------------------------------
+
     verification: str
     verification_status: str
 
-    # Final answer returned to the user
+    # Number of verification/revision cycles.
+    verification_attempts: int
+
+    # ---------------------------------------------------------
+    # FINAL RESPONSE
+    # ---------------------------------------------------------
+
     final_answer: str
 
-    # General workflow metadata
+    # ---------------------------------------------------------
+    # ERROR HANDLING
+    # ---------------------------------------------------------
+
     errors: list[str]

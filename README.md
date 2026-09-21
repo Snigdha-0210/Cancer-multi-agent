@@ -7,21 +7,21 @@
 **An Autonomous, State-Driven Multi-Agent Framework & High-Precision Oncology RAG Engine**
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph_Compiled_StateGraph-4F46E5?style=for-the-badge&logo=diagram&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Local_Vector_DB-DC2626?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
 [![Sentence-Transformers](https://img.shields.io/badge/Embeddings-384--dim_MiniLM-FF6F00?style=for-the-badge)](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
-[![LangGraph State](https://img.shields.io/badge/State_Graph-LangGraph_Architecture-4F46E5?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![Zero-PHI Compliant](https://img.shields.io/badge/Privacy-Zero--PHI_Compliant-059669?style=for-the-badge)](#-security-privacy--zero-phi-guarantee)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 <p align="center">
   <a href="#-executive-overview">Executive Overview</a> •
-  <a href="#-system-architecture--state-graph">State Graph Architecture</a> •
+  <a href="#-system-architecture--stategraph">StateGraph Architecture</a> •
   <a href="#-specialized-agent-roster">Agent Roster</a> •
   <a href="#-crisis--emergency-safety-guardrail">Emergency Safety</a> •
-  <a href="#-biomedical-rag-pipeline">Biomedical RAG</a> •
+  <a href="#-biomedical-rag-pipeline-v6-engine">Biomedical RAG</a> •
   <a href="#-vector-database--retrieval-layer">Qdrant Storage</a> •
-  <a href="#-verification-and-synthesis">Synthesis & Verification</a> •
+  <a href="#-synthesis--verification-engine">Synthesis & Verification</a> •
   <a href="#️-quickstart-guide">Quickstart</a>
 </p>
 
@@ -32,12 +32,12 @@
 ## 📌 Table of Contents
 
 - [🌟 Executive Overview](#-executive-overview)
-  - [The Clinical Problem](#the-clinical-problem)
+  - [The Clinical Challenge](#the-clinical-challenge)
   - [The Multi-Agent Solution](#the-multi-agent-solution)
-- [🏛️ System Architecture & State Graph](#️-system-architecture--state-graph)
+- [🏛️ System Architecture & StateGraph](#️-system-architecture--stategraph)
 - [👥 Specialized Agent Roster](#-specialized-agent-roster)
 - [🛡️ Crisis & Emergency Safety Guardrail](#️-crisis--emergency-safety-guardrail)
-- [🔄 Multi-Agent Workflow & Control Flow](#-multi-agent-workflow--control-flow)
+- [🔄 Multi-Agent Workflow & Deliberation Flow](#-multi-agent-workflow--deliberation-flow)
 - [🔬 Biomedical RAG Pipeline (v6 Engine)](#-biomedical-rag-pipeline-v6-engine)
   - [End-to-End Ingestion Flow](#end-to-end-ingestion-flow)
   - [Pipeline Processing Stages](#pipeline-processing-stages)
@@ -49,8 +49,9 @@
   - [1. Prerequisites](#1-prerequisites)
   - [2. Installation & Virtual Environment](#2-installation--virtual-environment)
   - [3. Running the RAG Ingestion Pipeline](#3-running-the-rag-ingestion-pipeline)
-  - [4. Testing Agents & Safety Guardrails](#4-testing-agents--safety-guardrails)
-  - [5. Launching the Backend API](#5-launching-the-backend-api)
+  - [4. Executing the Compiled LangGraph Workflow](#4-executing-the-compiled-langgraph-workflow)
+  - [5. Testing Individual Nodes & Offline Safety](#5-testing-individual-nodes--offline-safety)
+  - [6. Launching the Backend API](#6-launching-the-backend-api)
 - [🔌 API Reference](#-api-reference)
 - [🛣️ Development Roadmap](#️-development-roadmap)
 - [🔒 Security, Privacy & Zero-PHI Guarantee](#-security-privacy--zero-phi-guarantee)
@@ -60,28 +61,28 @@
 
 ## 🌟 Executive Overview
 
-### The Clinical Problem
-Oncological data is uniquely complex, rapidly evolving, and safety-critical:
-- **Literature Explosion & Recency Gap**: Tens of thousands of oncology trials are published annually. Core institutional knowledge (e.g., textbook guidelines) provides deep foundational concepts but may be outdated for recent FDA approvals (such as 2026 targeted therapies or novel immunotherapies).
-- **High Consequence of Hallucination**: Generic LLMs hallucinate treatment regimens, invent non-existent PubMed citations, and miss life-threatening drug-drug interactions.
-- **Mental Health & Medical Crisis Vulnerability**: Cancer patients frequently experience severe psychological distress or sudden acute toxicities, demanding deterministic emergency safety intercepts before generating standard informational text.
+### The Clinical Challenge
+Oncological decision-support involves navigating vast, complex, and rapidly evolving data landscapes:
+- **Literature Overload & Recency Gap**: Over 40,000 oncology studies and clinical trial updates are published each year. Core institutional guidelines provide essential clinical wisdom but may not reflect 2026 FDA accelerated approvals or recent targeted therapy combinations.
+- **High Consequence of Hallucinations**: Standard generative language models can hallucinate drug indications, invent citations, or omit critical contraindications.
+- **Crisis Vulnerability**: Cancer patients frequently experience severe psychological distress or sudden medical emergencies requiring deterministic safety intercepts before answering general inquiries.
 
 ### The Multi-Agent Solution
-The **Cancer Multi-Agent System** solves these challenges using a stateful, graph-based architecture:
-1. **Deterministic Safety-First Triage**: Intercepts crises and emergencies before general querying.
-2. **Temporal Grounding**: Explicitly distinguishes between historical institutional knowledge (e.g. Faculty textbooks from 2010/2018) and real-time external research (e.g. 2026 FDA approvals).
-3. **Dual-Layer Validation**: All proposed answers pass through an independent Verification Agent that evaluates factual claims against retrieved evidence with strict `PASS`, `FAIL`, or `REVISE` verdicts.
+The **Cancer Multi-Agent System** structures clinical AI assistance into a stateful, compiled **LangGraph** execution workflow:
+1. **Deterministic Safety-First Triage**: Intercepts crises and self-harm keywords before normal processing.
+2. **Temporal Grounding**: Separates historical institutional knowledge (e.g. 2010/2018 guidelines) from real-time external research (e.g. 2026 FDA approvals).
+3. **Dual-Layer Validation**: Passes all synthesized responses through an independent Verification Agent that evaluates factual claims against retrieved evidence with strict `PASS`, `FAIL`, or `REVISE` verdicts.
 
 <div align="center">
   <img src="assets/virtual-tumor-board.jpg" alt="Virtual Tumor Board Command Center" width="85%" style="border-radius: 8px; margin: 20px 0;" />
-  <p><em>Figure 1: Conceptual overview of the Multi-Agent Cancer Assistant orchestrating specialized agents and safety guardrails.</em></p>
+  <p><em>Figure 1: Conceptual rendering of the Multi-Agent Cancer Assistant orchestrating specialized agents and safety guardrails.</em></p>
 </div>
 
 ---
 
-## 🏛️ System Architecture & State Graph
+## 🏛️ System Architecture & StateGraph
 
-The system is coordinated via a stateful execution graph (`AgentState` defined in `backend/graph/state.py`) managing the global execution context across nodes:
+The system is powered by a compiled state machine (`backend/graph/workflow.py`) operating over a unified `AgentState` TypedDict:
 
 ```mermaid
 flowchart TD
@@ -94,42 +95,44 @@ flowchart TD
     classDef verifStyle fill:#c2410c,stroke:#f97316,stroke-width:2px,color:#fff
     classDef outStyle fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff
 
-    User([👤 User / Patient / Clinician]):::inputStyle -->|Prompt / Clinical Query| Router[🧭 Router & Triage Agent<br><code>backend/graph/router_node.py</code>]:::triageStyle
+    Start([🟢 START]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
     
-    Router -->|1. Emergency / Crisis Detected| EmergencyNode[🚨 Emergency & Crisis Node<br><code>backend/graph/emergency_node.py</code>]:::emergStyle
-    EmergencyNode -->|Immediate Safety Protocol + Crisis Helplines| OutputEmergency([📋 Emergency Safety Response]):::outStyle
+    Router -->|Condition: Emergency / Crisis| EmergencyNode[🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>]:::emergStyle
+    EmergencyNode --> SynthesisNode[⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>]:::synthStyle
 
-    Router -->|2. Faculty Knowledge Required| RAGNode[📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>]:::ragStyle
+    Router -->|Condition: Faculty Knowledge| RAGNode[📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>]:::ragStyle
     subgraph RAG_Layer ["💾 Local RAG Knowledge Engine"]
         RAGNode <--> EmbedModel[🧠 MiniLM-L6-v2 Embeddings]:::ragStyle
-        EmbedModel <--> QdrantDB[(💾 Local Qdrant Vector Store<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
+        EmbedModel <--> QdrantDB[(💾 Qdrant Vector Store<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
     end
 
-    Router -->|3. Latest / 2026 Info Needed| ResearchAgent[🌐 External Research Agent<br><code>backend/agents/research_agent.py</code>]:::resStyle
-    ResearchAgent <--> WebSources[🔎 Live Authoritative Health Sources<br><em>FDA, NCI, NIH, CDC, PubMed</em>]:::resStyle
+    Router -->|Condition: Latest / 2026 Info| ResearchNode[🌐 External Research Node<br><code>backend/graph/research_node.py</code>]:::resStyle
+    ResearchNode <--> WebSources[🔎 Live Authoritative Health Sources<br><em>FDA, NCI, NIH, CDC, PubMed</em>]:::resStyle
 
-    RAGNode & ResearchAgent --> SynthesisNode[⚖️ Synthesis Agent<br><code>backend/agents/synthesis_agent.py</code>]:::synthStyle
+    RAGNode -->|Conditional: If Research Also Needed| ResearchNode
+    RAGNode -->|Otherwise| SynthesisNode
+    ResearchNode --> SynthesisNode
     
-    SynthesisNode -->|Proposed Answer + Citations| VerifierNode[🔍 Verification Agent<br><code>backend/agents/verifier_agent.py</code>]:::verifStyle
+    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code>]:::verifStyle
 
-    VerifierNode -->|Verdict: PASS| OutputVerified([✅ Verified Answer + Evidence References]):::outStyle
-    VerifierNode -.->|Verdict: REVISE / FAIL| SynthesisNode
+    VerifierNode -->|Verdict: PASS| OutputVerified([🏁 END: Verified Answer + Evidence]):::outStyle
+    VerifierNode -->|Verdict: FAIL / REVISE| OutputFail([🏁 END: Failed Verification Audit]):::outStyle
 ```
 
 ---
 
 ## 👥 Specialized Agent Roster
 
-Each agent in the system is implemented with strict domain boundaries, typed data contracts, and deterministic safety rules:
+Every agent is engineered with a strict domain boundary, typed Pydantic models, and explicit medical reasoning rules:
 
 | Agent Persona | Module Path | Core Responsibilities | Evidence & Grounding Source |
 | :--- | :--- | :--- | :--- |
-| **🧭 Router / Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Analyzes user intent, prioritizes emergency triage over general queries, detects required knowledge domains, and outputs a typed `RouterDecision`. | Deterministic rule-screening + Structured LLM Classification |
+| **🧭 Router / Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Evaluates user intent, prioritizes emergency triage over general queries, detects required knowledge domains, and outputs a typed `RouterDecision`. | Deterministic rule-screening + Structured LLM Classification |
 | **🚨 Emergency & Safety Agent** | `backend/agents/emergency_agent.py`<br>`backend/safety/emergency_rules.py` | Detects self-harm, suicidal distress, and acute medical red flags; bypasses general RAG to provide calm, immediate safety instructions and crisis resources. | Deterministic Regex Keywords + Safe De-escalation Protocol |
 | **📚 Faculty RAG Agent** | `backend/rag/rag_agent.py`<br>`backend/graph/rag_node.py` | Queries local persistent Qdrant database, extracts semantic chunks, attributes page-level citations, and flags historical publication years (e.g. 2010/2018). | Local Qdrant Store (`cancer_faculty_knowledge`) |
-| **🌐 External Research Agent** | `backend/agents/research_agent.py` | Researches emerging oncology updates, newly approved 2026 therapies, and official regulatory changes with strict source date verification. | Live Web Tools + FDA, NCI, NIH, CDC Databases |
-| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py` | Consolidates multi-source evidence into a cohesive, patient-friendly answer; explicitly highlights temporal differences and caveats without diagnosing or prescribing. | Provided Faculty RAG & External Research Evidence Only |
-| **🔍 Verification Agent** | `backend/agents/verifier_agent.py` | Independently verifies proposed answers against supplied evidence, flags unsupported claims or omitted limitations, and issues structured `PASS`/`FAIL`/`REVISE` verdicts. | Raw Evidence Claims & Source Metadata |
+| **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/graph/research_node.py` | Researches emerging oncology updates, newly approved 2026 therapies, and official regulatory changes with strict source date verification. | Live Web Tools + FDA, NCI, NIH, CDC Databases |
+| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Consolidates multi-source evidence into a cohesive, patient-friendly answer; explicitly highlights temporal differences and caveats without diagnosing or prescribing. | Provided Faculty RAG & External Research Evidence Only |
+| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Independently verifies proposed answers against supplied evidence, flags unsupported claims or omitted limitations, and issues structured `PASS`/`FAIL`/`REVISE` verdicts. | Raw Evidence Claims & Source Metadata |
 
 ---
 
@@ -146,7 +149,7 @@ The system enforces a **Safety-First Architecture**:
 
 ---
 
-## 🔄 Multi-Agent Workflow & Control Flow
+## 🔄 Multi-Agent Workflow & Deliberation Flow
 
 The `AgentState` TypedDict passes state across graph nodes with clear trace logs:
 
@@ -260,12 +263,12 @@ data/qdrant/
 
 ## ⚖️ Synthesis & Verification Engine
 
-### Synthesis Agent (`synthesis_agent.py`)
+### Synthesis Agent (`synthesis_agent.py` / `synthesis_node.py`)
 - Blends historical faculty evidence with modern web research.
 - Explicitly warns when faculty knowledge reflects historical standards of care (e.g. 2010) that have since been superseded.
 - Never diagnoses or prescribes.
 
-### Verification Agent (`verifier_agent.py`)
+### Verification Agent (`verifier_agent.py` / `verification_node.py`)
 - Evaluates the proposed text against raw retrieved context.
 - Generates structured verification outputs:
 ```
@@ -316,14 +319,18 @@ cancer-multi-agent/
 │   │   ├── synthesis_agent.py          # Multi-evidence answer synthesis
 │   │   └── verifier_agent.py           # Independent factual validation & auditing
 │   │
-│   ├── graph/                          # LangGraph Nodes & State Execution
+│   ├── graph/                          # LangGraph Nodes & Compiled StateGraph
 │   │   ├── state.py                    # Shared AgentState TypedDict definition
-│   │   ├── state_test.py               # State schema validation tests
+│   │   ├── workflow.py                 # Compiled StateGraph workflow orchestrator
 │   │   ├── router_node.py              # Routing node execution
 │   │   ├── emergency_node.py           # Safety intercept execution node
-│   │   ├── emergency_node_test_offline.py # Offline deterministic safety test
 │   │   ├── rag_node.py                 # Faculty RAG node execution
+│   │   ├── research_node.py            # External research node execution
+│   │   ├── synthesis_node.py           # Synthesis node execution
+│   │   ├── verification_node.py        # Verification node execution
+│   │   ├── emergency_node_test_offline.py # Offline deterministic safety test
 │   │   ├── rag_node_test_offline.py    # Offline RAG node test
+│   │   ├── research_node_test_offline.py  # Offline research node test
 │   │   └── research_pipeline_test.py   # Multi-agent research pipeline test
 │   │
 │   ├── safety/                         # Safety rules & deterministic engines
@@ -390,7 +397,7 @@ python -m venv .venv
 # source .venv/bin/activate
 
 # Install required packages
-pip install fastapi uvicorn pydantic openai sentence-transformers qdrant-client pypdf
+pip install fastapi uvicorn pydantic openai sentence-transformers qdrant-client pypdf langgraph
 ```
 
 ### 3. Running the RAG Ingestion Pipeline
@@ -411,7 +418,14 @@ python -m backend.rag.embed_chunks
 python -m backend.rag.qdrant_store
 ```
 
-### 4. Testing Agents & Safety Guardrails
+### 4. Executing the Compiled LangGraph Workflow
+
+```bash
+# Test the compiled multi-agent StateGraph workflow
+python -m backend.graph.workflow
+```
+
+### 5. Testing Individual Nodes & Offline Safety
 
 ```bash
 # Test deterministic offline emergency detection
@@ -427,7 +441,7 @@ python -m backend.agents.router_agent
 python -m backend.graph.rag_node_test_offline
 ```
 
-### 5. Launching the Backend API
+### 6. Launching the Backend API
 
 Create a `.env` file in the project root:
 ```env
@@ -497,8 +511,10 @@ curl -X POST "http://127.0.0.1:8000/ask" \
   - [x] Live external research agent with source validation (`research_agent.py`).
   - [x] Multi-source consensus synthesis agent (`synthesis_agent.py`).
   - [x] Independent verification & hallucination auditing agent (`verifier_agent.py`).
-- [ ] **Phase 4: Full LangGraph Compilation & Clinician UI**
-  - [ ] End-to-end compiled LangGraph application with streaming responses.
+- [x] **Phase 4: Compiled LangGraph StateGraph Execution**
+  - [x] Compiled `StateGraph` linking Router, Emergency, RAG, Research, Synthesis, and Verification (`backend/graph/workflow.py`).
+  - [x] Conditional edge routing based on triage decisions and verification audit status.
+- [ ] **Phase 5: Clinician Interface & Automated Benchmarking**
   - [ ] Web-based Virtual Tumor Board review dashboard.
   - [ ] Automated evaluation test suite with NCBI PMID validator (`tests/eval_citations.py`).
 

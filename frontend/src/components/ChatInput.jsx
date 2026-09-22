@@ -34,8 +34,9 @@ const QUICK_PROMPTS = [
  * @param {Object} props
  * @param {Function} props.onSend - Submit callback (question: string)
  * @param {boolean} props.isLoading - Whether a query is in progress
+ * @param {string} [props.mode="mock"] - "mock" | "live" | string
  */
-export default function ChatInput({ onSend, isLoading }) {
+export default function ChatInput({ onSend, isLoading, mode = 'mock' }) {
   const [input, setInput] = useState('');
   const textareaRef = useRef(null);
 
@@ -131,7 +132,11 @@ export default function ChatInput({ onSend, isLoading }) {
 
         <div className="input-helper-text">
           <span>Press <strong>Enter</strong> to submit, <strong>Shift + Enter</strong> for a new line</span>
-          <span>Grounded in institutional faculty PDFs & live oncology research</span>
+          <span>
+            {mode === 'mock'
+              ? 'Development simulation — no live evidence retrieved'
+              : 'Grounded in institutional faculty PDFs & current oncology research'}
+          </span>
         </div>
       </div>
     </div>

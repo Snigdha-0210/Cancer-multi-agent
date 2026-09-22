@@ -129,7 +129,11 @@ export default function App() {
             selectedMessage={selectedMessage}
           />
 
-          <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+          <ChatInput
+            onSend={handleSendMessage}
+            isLoading={isLoading}
+            mode={systemMode}
+          />
         </section>
 
         {/* Right-Side Agent Activity & Evidence Panel */}

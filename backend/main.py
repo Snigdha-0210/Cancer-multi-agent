@@ -1,11 +1,7 @@
-import os
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from backend.dev_config import is_mock_mode
-from backend.graph.workflow import workflow
-from backend.graph.final_node import build_final_response
 from backend.graph.mock_workflow import run_mock_workflow
 
 
@@ -39,7 +35,6 @@ def health():
 
 @app.post("/ask")
 def ask_question(request: QuestionRequest):
-
     question = request.question.strip()
 
     if not question:
@@ -49,11 +44,19 @@ def ask_question(request: QuestionRequest):
         )
 
     # ---------------------------------------------------------
-    # MOCK DEVELOPMENT MODE
+    # DEVELOPMENT / MOCK MODE
     # ---------------------------------------------------------
-
+    #
+    # IMPORTANT:
+    # Do not import the real LangGraph workflow here.
+    #
+    # The real workflow imports sentence-transformers/PyTorch,
+    # and Windows is currently blocking one of PyTorch's DLLs.
+    #
+    # Mock mode therefore stays completely independent of the
+    # RAG/PyTorch stack.
+    #
     if is_mock_mode():
-
         return {
             "question": question,
             **run_mock_workflow(question),
@@ -62,6 +65,13 @@ def ask_question(request: QuestionRequest):
     # ---------------------------------------------------------
     # LIVE MODE
     # ---------------------------------------------------------
+    #
+    # These imports are intentionally inside the live branch.
+    # This prevents PyTorch/RAG dependencies from loading while
+    # we are developing the frontend in mock mode.
+    #
+    from backend.graph.workflow import workflow
+    from backend.graph.final_node import build_final_response
 
     initial_state = {
         "question": question,
@@ -70,7 +80,6 @@ def ask_question(request: QuestionRequest):
     }
 
     try:
-
         final_state = workflow.invoke(initial_state)
 
         response = build_final_response(final_state)
@@ -82,10 +91,6 @@ def ask_question(request: QuestionRequest):
         }
 
     except Exception as error:
-
-        # Never expose raw API errors, organization IDs,
-        # internal limits, or billing information to the user.
-
         print(f"Workflow execution error: {error}")
 
         raise HTTPException(

@@ -1,7 +1,16 @@
+import os
+
 from openai import OpenAI
 
 from backend.config import OPENAI_API_KEY
-from backend.rag.retrieve import retrieve_chunks
+from backend.rag.retriever import SemanticRetriever
+
+
+# ============================================================
+# SETTINGS & MODEL CONFIGURATION
+# ============================================================
+
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 
 # ============================================================
@@ -11,6 +20,13 @@ from backend.rag.retrieve import retrieve_chunks
 client = OpenAI(
     api_key=OPENAI_API_KEY
 )
+
+
+# ============================================================
+# RETRIEVER
+# ============================================================
+
+retriever = SemanticRetriever()
 
 
 # ============================================================
@@ -61,12 +77,16 @@ IMPORTANT RULES:
     explicitly mention the conflict rather than choosing
     information arbitrarily.
 
+12. Do not treat the similarity score as medical evidence.
+    It is only an indication of semantic relevance.
+
 Your response should contain:
 
 - A concise answer.
 - A "Sources" section listing the relevant document and page(s).
 
 Remember:
+
 You are a retrieval-grounded knowledge agent, not a diagnostic
 or treatment-prescribing system.
 """
@@ -136,65 +156,25 @@ Text:
 
 
 # ============================================================
-# NORMALIZE RETRIEVAL RESULTS
+# RETRIEVE EVIDENCE
 # ============================================================
 
-def normalize_results(
-    results: list,
+def retrieve_evidence(
+    question: str,
+    top_k: int = 5,
 ) -> list[dict]:
     """
-    Convert Qdrant retrieval results into ordinary dictionaries.
+    Retrieve relevant evidence from the complete faculty
+    knowledge base.
 
-    Keeping this conversion here makes the RAG agent independent
-    from the internal Qdrant result object.
+    This uses the current NumPy-based semantic retriever
+    instead of Qdrant.
     """
 
-    normalized = []
-
-    for result in results:
-
-        payload = result.payload or {}
-
-        normalized.append(
-            {
-                "chunk_id": payload.get(
-                    "chunk_id"
-                ),
-                "document": payload.get(
-                    "document"
-                ),
-                "page_start": payload.get(
-                    "page_start"
-                ),
-                "page_end": payload.get(
-                    "page_end"
-                ),
-                "section": payload.get(
-                    "section"
-                ),
-                "text": payload.get(
-                    "text",
-                    "",
-                ),
-                "source_type": payload.get(
-                    "source_type"
-                ),
-                "source_year": payload.get(
-                    "source_year"
-                ),
-                "source_id": payload.get(
-                    "source_id"
-                ),
-                "embedding_model": payload.get(
-                    "embedding_model"
-                ),
-                "score": float(
-                    result.score
-                ),
-            }
-        )
-
-    return normalized
+    return retriever.search(
+        query=question,
+        top_k=top_k,
+    )
 
 
 # ============================================================
@@ -210,20 +190,25 @@ def answer_with_rag(
     """
 
     # --------------------------------------------------------
+    # Validate question
+    # --------------------------------------------------------
+
+    if not question or not question.strip():
+
+        return {
+            "question": question,
+            "answer": "Please provide a question.",
+            "sources": [],
+            "retrieved_chunks": [],
+        }
+
+    # --------------------------------------------------------
     # Retrieve evidence
     # --------------------------------------------------------
 
-    raw_results = retrieve_chunks(
+    retrieved_chunks = retrieve_evidence(
         question,
         top_k=top_k,
-    )
-
-    # --------------------------------------------------------
-    # Normalize Qdrant results
-    # --------------------------------------------------------
-
-    retrieved_chunks = normalize_results(
-        raw_results
     )
 
     # --------------------------------------------------------
@@ -270,19 +255,47 @@ question according to your system instructions.
 
 Do not add medical facts from outside the retrieved evidence.
 """
-
     # --------------------------------------------------------
     # Call LLM
     # --------------------------------------------------------
 
-    response = client.responses.create(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        input=user_prompt,
-    )
+    print()
+    print("=" * 70)
+    print("GENERATED CONTEXT")
+    print("=" * 70)
+    try:
+        print(user_prompt)
+    except UnicodeEncodeError:
+        print(user_prompt.encode("ascii", errors="replace").decode("ascii"))
 
-    answer = response.output_text
+    try:
+        response = client.responses.create(
+            model=MODEL_NAME,
+            instructions=SYSTEM_PROMPT,
+            input=user_prompt,
+        )
 
+        answer = response.output_text
+
+    except Exception as e:
+        error_text = str(e)
+
+        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
+            answer = (
+                "[LLM GENERATION UNAVAILABLE]\n\n"
+                "The faculty evidence was successfully retrieved, "
+                "but the answer-generation API is currently unavailable "
+                "because the API credit balance is exhausted."
+            )
+
+            print()
+            print("=" * 70)
+            print("RAG RETRIEVAL SUCCESSFUL — LLM GENERATION UNAVAILABLE")
+            print("=" * 70)
+            print("Reason: OpenAI API credit balance exhausted.")
+
+        else:
+            raise
     # --------------------------------------------------------
     # Build source list
     # --------------------------------------------------------
@@ -311,6 +324,9 @@ Do not add medical facts from outside the retrieved evidence.
                 "score": chunk.get(
                     "score"
                 ),
+                "chunk_id": chunk.get(
+                    "chunk_id"
+                ),
             }
         )
 
@@ -332,35 +348,44 @@ Do not add medical facts from outside the retrieved evidence.
 
 def main():
 
-    question = (
-        "What are the established risk factors for melanoma?"
-    )
+    questions = [
+        "What are the established risk factors for melanoma?",
+        "What is ductal carcinoma in situ?",
+        "What are the symptoms of lung cancer?",
+    ]
 
-    result = answer_with_rag(
-        question
-    )
+    for question in questions:
 
-    print()
-    print("=" * 70)
-    print("RAG ANSWER")
-    print("=" * 70)
-
-    print()
-    print(result["answer"])
-
-    print()
-    print("=" * 70)
-    print("SOURCES")
-    print("=" * 70)
-
-    for source in result["sources"]:
-
-        print(
-            f"- {source['document']} "
-            f"pages {source['page_start']}-"
-            f"{source['page_end']} "
-            f"(score: {source['score']:.4f})"
+        result = answer_with_rag(
+            question,
+            top_k=5,
         )
+
+        print()
+        print("=" * 70)
+        print("QUESTION")
+        print("=" * 70)
+        print(question)
+
+        print()
+        print("=" * 70)
+        print("RAG ANSWER")
+        print("=" * 70)
+        print(result["answer"])
+
+        print()
+        print("=" * 70)
+        print("SOURCES")
+        print("=" * 70)
+
+        for source in result["sources"]:
+
+            print(
+                f"- {source['document']} "
+                f"pages {source['page_start']}-"
+                f"{source['page_end']} "
+                f"(score: {source['score']:.4f})"
+            )
 
 
 if __name__ == "__main__":

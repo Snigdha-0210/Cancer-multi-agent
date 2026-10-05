@@ -23,6 +23,11 @@ def rag_node(state: AgentState) -> AgentState:
 
     state["faculty_sources"] = result.get("sources", [])
 
+    state["faculty_retrieved_chunks"] = result.get(
+        "retrieved_chunks",
+        [],
+    )
+
     return state
 
 

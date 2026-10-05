@@ -172,7 +172,7 @@ def main():
 
     print()
     print("Agents used:")
-    print(" → ".join(response["agents_used"]))
+    print(" -> ".join(response["agents_used"]))
 
     print()
     print(

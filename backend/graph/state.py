@@ -20,6 +20,7 @@ class AgentState(TypedDict, total=False):
 
     faculty_evidence: str
     faculty_sources: list[dict[str, Any]]
+    faculty_retrieved_chunks: list[dict[str, Any]]
 
     # ---------------------------------------------------------
     # CURRENT EXTERNAL RESEARCH

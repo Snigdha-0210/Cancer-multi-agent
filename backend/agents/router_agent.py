@@ -1,7 +1,17 @@
+import os
+
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from backend.config import OPENAI_API_KEY
+from backend.safety.emergency_rules import detect_emergency_keywords
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -94,15 +104,71 @@ class RouterDecision(BaseModel):
 
 
 def route_question(question: str) -> RouterDecision:
+    try:
+        response = client.responses.parse(
+            model=MODEL_NAME,
+            instructions=SYSTEM_PROMPT,
+            input=question,
+            text_format=RouterDecision,
+        )
+        return response.output_parsed
+    except Exception as e:
+        error_text = str(e)
+        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
+            print()
+            print("=" * 70)
+            print("ROUTER TRIAGE — LLM CLASSIFICATION UNAVAILABLE")
+            print("=" * 70)
+            print("Reason: OpenAI API credit balance exhausted.")
+            print("Action: Applying deterministic safety and intent rules.")
 
-    response = client.responses.parse(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        input=question,
-        text_format=RouterDecision,
-    )
+            q_lower = question.lower()
+            emergency_info = detect_emergency_keywords(question)
+            if emergency_info.get("emergency_detected", False):
+                return RouterDecision(
+                    faculty_rag=False,
+                    current_research=False,
+                    emergency=True,
+                    synthesis=True,
+                    verification=True,
+                    intent="emergency",
+                    reason="Deterministic emergency safety pattern detected.",
+                    confidence="HIGH",
+                    priority="HIGH",
+                )
 
-    return response.output_parsed
+            temporal_keywords = [
+                "latest", "current", "recent", "newest", "2026",
+                "fda approval", "fda-approved", "new approved"
+            ]
+            is_temporal = any(kw in q_lower for kw in temporal_keywords)
+
+            if is_temporal:
+                return RouterDecision(
+                    faculty_rag=True,
+                    current_research=True,
+                    emergency=False,
+                    synthesis=True,
+                    verification=True,
+                    intent="current_research",
+                    reason="Question involves recent updates alongside foundational knowledge.",
+                    confidence="HIGH",
+                    priority="NORMAL",
+                )
+
+            return RouterDecision(
+                faculty_rag=True,
+                current_research=False,
+                emergency=False,
+                synthesis=True,
+                verification=True,
+                intent="faculty_knowledge",
+                reason="Standard oncology guideline query routed to faculty knowledge base.",
+                confidence="HIGH",
+                priority="NORMAL",
+            )
+        else:
+            raise
 
 
 def main():

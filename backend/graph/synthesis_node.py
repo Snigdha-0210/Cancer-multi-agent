@@ -94,9 +94,9 @@ def main():
 
     print()
     print("Expected evidence flow:")
-    print("- Faculty evidence → synthesis")
-    print("- Current research → synthesis")
-    print("- Emergency evidence → synthesis when applicable")
+    print("- Faculty evidence -> synthesis")
+    print("- Current research -> synthesis")
+    print("- Emergency evidence -> synthesis when applicable")
 
 
 if __name__ == "__main__":

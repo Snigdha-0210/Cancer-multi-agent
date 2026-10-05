@@ -457,7 +457,10 @@ cancer-multi-agent/
 │       ├── embed_chunks.py             # Batch vector generation pipeline
 │       ├── qdrant_store.py             # Local Qdrant collection builder & upsert
 │       ├── retrieve.py                 # Semantic retrieval & cosine similarity engine
+│       ├── retriever.py                # Fast NumPy-based semantic retrieval engine
 │       ├── embedding_test.py           # Sample test suite for sentence embeddings
+│       ├── embed_all_chunks.py         # Full 31,498-chunk batch embedding pipeline
+│       ├── retrieval_test.py           # Semantic retrieval verification runner
 │       └── rag_agent.py                # Standalone Faculty RAG agent
 │
 ├── data/                               # Knowledge base & data artifacts (managed)

@@ -11,6 +11,7 @@ def build_verification_evidence(state: AgentState) -> str:
     evidence_parts = []
 
     faculty_evidence = state.get("faculty_evidence", "")
+    faculty_retrieved_chunks = state.get("faculty_retrieved_chunks", [])
     research_evidence = state.get("research_evidence", "")
     emergency_response = state.get("emergency_response", "")
 
@@ -18,6 +19,21 @@ def build_verification_evidence(state: AgentState) -> str:
         evidence_parts.append(
             "=== FACULTY KNOWLEDGE EVIDENCE ===\n"
             + faculty_evidence
+        )
+
+    if faculty_retrieved_chunks:
+        chunks_text = []
+        for i, chunk in enumerate(faculty_retrieved_chunks, 1):
+            doc = chunk.get("document", "Unknown")
+            page_start = chunk.get("page_start", "?")
+            page_end = chunk.get("page_end", "?")
+            text = chunk.get("text", "").strip()
+            chunks_text.append(
+                f"[Source {i}: {doc} (Pages {page_start}-{page_end})]\n{text}"
+            )
+        evidence_parts.append(
+            "=== RAW RETRIEVED FACULTY CHUNKS ===\n"
+            + "\n\n".join(chunks_text)
         )
 
     if research_evidence:

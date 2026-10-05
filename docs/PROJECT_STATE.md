@@ -275,28 +275,29 @@ A polished dark OncoAgent frontend already exists via Antigravity/Claude, includ
 
 Frontend is not the current bottleneck. Focus on knowledge → embeddings → retrieval → RAG → agents.
 
-## Important files
-
+## Completed: full embeddings & semantic retriever
 Scripts:
-- backend/rag/extract_sources.py
-- backend/rag/pdf_audit.py
-- backend/rag/build_document_map.py
-- backend/rag/knowledge_units.py
-- backend/rag/chunk_inspector.py
+- backend/rag/embedding_test.py (100 units test)
+- backend/rag/embed_all_chunks.py (31,498 units embedded into all_embeddings.npz)
+- backend/rag/retriever.py (Normalized dot-product SemanticRetriever)
+- backend/rag/retrieval_test.py (Retrieval test runner)
+- backend/rag/rag_agent.py (Integrated with SemanticRetriever & quota fallback)
+- backend/graph/rag_node.py (Stores faculty_retrieved_chunks into AgentState)
+- backend/graph/verification_node.py (Verifies against raw retrieved faculty chunks)
+- backend/graph/workflow.py (LangGraph compiled workflow tested and passing)
 
 Generated data:
 - data/processed/inventory/source_inventory.json
 - data/processed/audit/pdf_audit.json
 - data/processed/document_map/document_map.json
 - data/processed/knowledge_units/knowledge_units.json
+- data/processed/embeddings/all_embeddings.npz (31,498 vectors, 384-dim)
 
 ## Do not lose these decisions
 
 - Do not pretend to have read inaccessible files.
 - Complete source corpus matters more than whether it came from Drive, ZIP, or local files.
 - Do not endlessly perfect section detection.
-- Do not embed everything before testing a small batch.
-- Do not generate 1000+ QA before retrieval is validated.
 - Preserve source provenance.
 - Old sources require freshness validation before being presented as current.
 - Emergency handling is safety-first.
@@ -312,6 +313,7 @@ Tell the new chat:
 “I am continuing my cancer multi-agent RAG project. Read PROJECT_STATE.md first. Do not restart completed work. Continue from the CURRENT EXACT PROJECT POSITION / NEXT STEP.”
 
 The new chat should start at:
-SMALL EMBEDDING TEST
+MULTI-AGENT DELIBERATION & EVALUATION DATASET GENERATION
 
-Do not redo extraction, PDF audit, document map, or knowledge-unit generation unless the source corpus changes or a concrete test shows a problem.
+Do not redo extraction, PDF audit, document map, knowledge-unit generation, or embeddings unless the source corpus changes or a concrete test shows a problem.
+

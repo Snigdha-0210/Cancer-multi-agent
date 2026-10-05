@@ -189,7 +189,7 @@ def run_test(question: str):
     print()
 
     print("AGENTS USED:")
-    print(" → ".join(response["agents_used"]))
+    print(" -> ".join(response["agents_used"]))
     print()
 
     print("VERIFICATION ATTEMPTS:")

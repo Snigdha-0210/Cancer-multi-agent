@@ -1,34 +1,86 @@
+import json
 from collections import Counter
+from pathlib import Path
 
-from backend.rag.pdf_loader import load_all_pdfs
-from backend.rag.chunker import chunk_pages
+
+INPUT_FILE = Path(
+    "data/processed/knowledge_units/knowledge_units.json"
+)
+
+
+def load_knowledge_units():
+    if not INPUT_FILE.exists():
+        raise FileNotFoundError(
+            f"Knowledge-unit file not found:\n{INPUT_FILE}"
+        )
+
+    with INPUT_FILE.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # ---------------------------------------------------------
+    # The knowledge-unit builder stores metadata + chunks
+    # inside a JSON object.
+    #
+    # Find the actual list of knowledge units automatically.
+    # ---------------------------------------------------------
+
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, dict):
+
+        # Common possible keys
+        possible_keys = [
+            "chunks",
+            "knowledge_units",
+            "units",
+            "documents",
+            "data",
+        ]
+
+        for key in possible_keys:
+            value = data.get(key)
+
+            if isinstance(value, list):
+                return value
+
+        # If no known key works, look for the first list
+        # containing dictionaries.
+        for key, value in data.items():
+
+            if isinstance(value, list) and value:
+                if isinstance(value[0], dict):
+                    return value
+
+    raise ValueError(
+        "Could not find the knowledge-unit list inside "
+        "knowledge_units.json."
+    )
 
 
 def main():
-    print("Loading PDF pages...")
-    pages = load_all_pdfs()
 
-    print("Creating chunks...")
-    chunks = chunk_pages(pages)
+    print("Loading knowledge units...")
+
+    chunks = load_knowledge_units()
 
     print()
-    print("=" * 70)
-    print("CHUNK QUALITY INSPECTION")
-    print("=" * 70)
+    print("=" * 80)
+    print("KNOWLEDGE UNIT QUALITY INSPECTION")
+    print("=" * 80)
 
-    print(f"Total pages:  {len(pages)}")
-    print(f"Total chunks: {len(chunks)}")
+    print(f"Total knowledge units: {len(chunks)}")
 
     if not chunks:
-        print("No chunks were created.")
+        print("No knowledge units were found.")
         return
 
     # ---------------------------------------------------------
-    # Basic size statistics
+    # TEXT SIZE
     # ---------------------------------------------------------
 
     sizes = [
-        len(chunk["text"])
+        len(chunk.get("text", ""))
         for chunk in chunks
     ]
 
@@ -36,52 +88,193 @@ def main():
 
     print()
     print("TEXT SIZE")
-    print("-" * 70)
-    print(f"Smallest chunk: {min(sizes)} characters")
-    print(f"Largest chunk:  {max(sizes)} characters")
-    print(f"Average chunk:  {average_size:.0f} characters")
+    print("-" * 80)
+
+    print(f"Smallest unit: {min(sizes)} characters")
+    print(f"Largest unit:  {max(sizes)} characters")
+    print(f"Average unit:  {average_size:.0f} characters")
 
     # ---------------------------------------------------------
-    # Section statistics
+    # VERY SMALL UNITS
     # ---------------------------------------------------------
 
-    sections = Counter(
-        chunk["section"]
+    small_units = [
+        chunk
+        for chunk in chunks
+        if len(chunk.get("text", "")) < 300
+    ]
+
+    print()
+    print("VERY SMALL UNITS")
+    print("-" * 80)
+
+    print(
+        f"Units below 300 characters: "
+        f"{len(small_units)}"
+    )
+
+    # ---------------------------------------------------------
+    # LARGE UNITS
+    # ---------------------------------------------------------
+
+    large_units = [
+        chunk
+        for chunk in chunks
+        if len(chunk.get("text", "")) > 2600
+    ]
+
+    print()
+    print("LARGE UNITS")
+    print("-" * 80)
+
+    print(
+        f"Units above 2600 characters: "
+        f"{len(large_units)}"
+    )
+
+    # ---------------------------------------------------------
+    # DOCUMENT INFORMATION
+    # ---------------------------------------------------------
+
+    documents = Counter(
+        chunk.get("document", "Unknown")
         for chunk in chunks
     )
 
     print()
+    print("DOCUMENT INFORMATION")
+    print("-" * 80)
+
+    print(
+        f"Unique documents: {len(documents)}"
+    )
+
+    print()
+    print("Top 15 documents by knowledge-unit count:")
+
+    for document, count in documents.most_common(15):
+        print(f"{count:6}  {document}")
+
+    # ---------------------------------------------------------
+    # DOCUMENT TYPES
+    # ---------------------------------------------------------
+
+    document_types = Counter(
+        chunk.get("document_type", "Unknown")
+        for chunk in chunks
+    )
+
+    print()
+    print("DOCUMENT TYPES")
+    print("-" * 80)
+
+    for document_type, count in document_types.items():
+        print(f"{document_type}: {count}")
+
+    # ---------------------------------------------------------
+    # SECTION INFORMATION
+    # ---------------------------------------------------------
+
+    sections = Counter(
+        chunk.get("section") or "Unknown"
+        for chunk in chunks
+    )
+
+    unknown_sections = sections.get("Unknown", 0)
+
+    print()
     print("SECTION INFORMATION")
-    print("-" * 70)
-    print(f"Unique sections detected: {len(sections)}")
+    print("-" * 80)
 
-    unknown_count = sections.get("Unknown", 0)
+    print(
+        f"Unique section values: {len(sections)}"
+    )
 
-    print(f"Chunks with 'Unknown' section: {unknown_count}")
+    print(
+        f"Units without useful section: "
+        f"{unknown_sections}"
+    )
+
+    print()
+    print("Top 20 section values:")
+
+    for section, count in sections.most_common(20):
+        print(f"{count:6}  {section}")
 
     # ---------------------------------------------------------
-    # Very small chunks
+    # CHAPTER INFORMATION
     # ---------------------------------------------------------
 
-    small_chunks = [
+    chapters = Counter(
+        chunk.get("chapter") or "Unknown"
+        for chunk in chunks
+    )
+
+    print()
+    print("CHAPTER INFORMATION")
+    print("-" * 80)
+
+    print(
+        f"Unique chapter values: {len(chapters)}"
+    )
+
+    print()
+    print("Top 15 chapter values:")
+
+    for chapter, count in chapters.most_common(15):
+        print(f"{count:6}  {chapter}")
+
+    # ---------------------------------------------------------
+    # PAGE METADATA
+    # ---------------------------------------------------------
+
+    missing_pages = [
         chunk
         for chunk in chunks
-        if len(chunk["text"]) < 300
+        if chunk.get("page_start") is None
+        or chunk.get("page_end") is None
     ]
 
     print()
-    print("VERY SMALL CHUNKS")
-    print("-" * 70)
-    print(f"Chunks below 300 characters: {len(small_chunks)}")
+    print("PAGE METADATA")
+    print("-" * 80)
+
+    print(
+        f"Units missing page metadata: "
+        f"{len(missing_pages)}"
+    )
 
     # ---------------------------------------------------------
-    # Print representative chunks
+    # ID UNIQUENESS
+    # ---------------------------------------------------------
+
+    ids = [
+        chunk.get("chunk_id")
+        for chunk in chunks
+    ]
+
+    unique_ids = set(ids)
+
+    print()
+    print("ID CHECK")
+    print("-" * 80)
+
+    print(f"Total IDs:  {len(ids)}")
+    print(f"Unique IDs: {len(unique_ids)}")
+
+    if len(ids) == len(unique_ids):
+        print("Result: PASS - all chunk IDs are unique.")
+    else:
+        print("Result: WARNING - duplicate chunk IDs found.")
+
+    # ---------------------------------------------------------
+    # REPRESENTATIVE SAMPLES
     # ---------------------------------------------------------
 
     print()
-    print("=" * 70)
-    print("SAMPLE CHUNKS")
-    print("=" * 70)
+    print("=" * 80)
+    print("REPRESENTATIVE KNOWLEDGE UNITS")
+    print("=" * 80)
 
     sample_indexes = [
         0,
@@ -103,21 +296,70 @@ def main():
         chunk = chunks[index]
 
         print()
-        print("-" * 70)
+        print("-" * 80)
         print(f"Sample #{index + 1}")
-        print("-" * 70)
+        print("-" * 80)
 
-        print(f"Chunk ID:   {chunk['chunk_id']}")
-        print(f"Document:   {chunk['document']}")
         print(
-            f"Pages:      "
-            f"{chunk['page_start']} - {chunk['page_end']}"
+            f"Chunk ID:      "
+            f"{chunk.get('chunk_id')}"
         )
-        print(f"Section:    {chunk['section']}")
-        print(f"Characters: {len(chunk['text'])}")
+
+        print(
+            f"Document:      "
+            f"{chunk.get('document')}"
+        )
+
+        print(
+            f"Document type: "
+            f"{chunk.get('document_type')}"
+        )
+
+        print(
+            f"Pages:         "
+            f"{chunk.get('page_start')} - "
+            f"{chunk.get('page_end')}"
+        )
+
+        print(
+            f"Chapter:       "
+            f"{chunk.get('chapter')}"
+        )
+
+        print(
+            f"Section:       "
+            f"{chunk.get('section')}"
+        )
+
+        print(
+            f"Characters:    "
+            f"{len(chunk.get('text', ''))}"
+        )
 
         print()
-        print(chunk["text"][:1000])
+        print("TEXT")
+        print("-" * 80)
+
+        text = chunk.get("text", "")
+
+        print(text[:1500])
+
+        if len(text) > 1500:
+            print()
+            print("[...text truncated...]")
+
+    # ---------------------------------------------------------
+    # FINAL
+    # ---------------------------------------------------------
+
+    print()
+    print("=" * 80)
+    print("INSPECTION COMPLETE")
+    print("=" * 80)
+
+    print(
+        f"Knowledge units inspected: {len(chunks)}"
+    )
 
 
 if __name__ == "__main__":

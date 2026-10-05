@@ -1,6 +1,15 @@
+import os
+
 from openai import OpenAI
 
 from backend.config import OPENAI_API_KEY
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -111,13 +120,37 @@ Return your verification using the exact structure requested
 in the system instructions.
 """
 
-    response = client.responses.create(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        input=user_prompt,
-    )
+    try:
+        response = client.responses.create(
+            model=MODEL_NAME,
+            instructions=SYSTEM_PROMPT,
+            input=user_prompt,
+        )
 
-    return response.output_text
+        return response.output_text
+
+    except Exception as e:
+        error_text = str(e)
+
+        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
+            return """VERDICT: UNKNOWN
+
+CONFIDENCE: LOW
+
+SUPPORTED CLAIMS:
+- Verification could not be completed because the verification model is unavailable.
+
+UNSUPPORTED OR PROBLEMATIC CLAIMS:
+- The proposed answer could not be fully checked.
+
+MISSING INFORMATION:
+- Live verification by the Verification Agent.
+
+RECOMMENDED ACTION:
+- RESEARCH: obtain verification from the Verification Agent when the API is available.
+"""
+
+        raise
 
 
 def main():

@@ -131,14 +131,89 @@ Do not provide ordinary cancer-information content.
 Prioritize immediate safety.
 """
 
-    response = client.responses.parse(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        input=user_prompt,
-        text_format=EmergencyResponse,
-    )
+    try:
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            instructions=SYSTEM_PROMPT,
+            input=user_prompt,
+            text_format=EmergencyResponse,
+        )
 
-    return response.output_parsed
+        return response.output_parsed
+
+    except Exception as e:
+        error_text = str(e)
+
+        if (
+            "insufficient_quota" in error_text
+            or "credit_balance_exhausted" in error_text
+        ):
+            # --------------------------------------------------------
+            # Deterministic safety fallback
+            # --------------------------------------------------------
+            # The emergency path must remain functional even when
+            # the LLM is unavailable.
+            
+            if detection["self_harm"]:
+                return EmergencyResponse(
+                    emergency=True,
+                    emergency_type="self_harm",
+                    response=(
+                        "I'm really sorry you're going through this. "
+                        "Please do not stay alone right now. Move away "
+                        "from anything you could use to hurt yourself "
+                        "and contact a trusted person who can stay with "
+                        "you. If you may act on these thoughts or have "
+                        "already harmed yourself, contact local emergency "
+                        "services or go to the nearest emergency department "
+                        "immediately."
+                    ),
+                    immediate_danger_question=(
+                        "Are you in immediate danger right now, "
+                        "or have you already harmed yourself?"
+                    ),
+                    recommended_action=(
+                        "Seek immediate human support and emergency/crisis "
+                        "assistance if there is immediate danger."
+                    ),
+                )
+
+            if detection["medical_emergency"]:
+                return EmergencyResponse(
+                    emergency=True,
+                    emergency_type="medical_emergency",
+                    response=(
+                        "The symptoms you described may require immediate "
+                        "medical attention. Please contact local emergency "
+                        "services or go to the nearest emergency department "
+                        "now. If possible, have someone stay with you."
+                    ),
+                    immediate_danger_question=(
+                        "Are you currently in immediate medical danger?"
+                    ),
+                    recommended_action=(
+                        "Seek immediate emergency medical care."
+                    ),
+                )
+
+            return EmergencyResponse(
+                emergency=True,
+                emergency_type="general",
+                response=(
+                    "I'm sorry you're going through this. Please seek "
+                    "immediate support from a trusted person and contact "
+                    "local emergency services if you are in immediate danger."
+                ),
+                immediate_danger_question=(
+                    "Are you currently in immediate danger?"
+                ),
+                recommended_action=(
+                    "Seek immediate human support and emergency assistance "
+                    "if necessary."
+                ),
+            )
+
+        raise
 
 
 def handle_emergency(question: str) -> EmergencyResponse:

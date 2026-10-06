@@ -106,13 +106,56 @@ Requirements:
 - If the evidence is insufficient or conflicting, say so.
 """
 
-    response = client.responses.create(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        input=user_prompt,
-    )
+    try:
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            instructions=SYSTEM_PROMPT,
+            input=user_prompt,
+        )
 
-    return response.output_text
+        return response.output_text
+
+    except Exception as e:
+        error_text = str(e)
+
+        if (
+            "insufficient_quota" in error_text
+            or "credit_balance_exhausted" in error_text
+        ):
+            print()
+            print("=" * 70)
+            print("SYNTHESIS AGENT — LLM GENERATION UNAVAILABLE")
+            print("=" * 70)
+            print("Reason: OpenAI API credit balance exhausted.")
+
+            # Deterministic fallback for offline development/testing.
+            if emergency_evidence.strip():
+                return (
+                    "This is an emergency situation. "
+                    "Please seek immediate human help."
+                )
+
+            if research_evidence.strip():
+                return (
+                    "Current external research was requested, but "
+                    "the answer-generation model is currently unavailable. "
+                    "The available research evidence should be verified "
+                    "before presenting a current medical answer."
+                )
+
+            if faculty_evidence.strip():
+                return (
+                    "The faculty knowledge base contains relevant "
+                    "evidence for this question, but the answer-generation "
+                    "model is currently unavailable."
+                )
+
+            return (
+                "I could not generate an answer because the "
+                "available answer-generation model is currently unavailable."
+            )
+
+        raise
 
 
 def main():

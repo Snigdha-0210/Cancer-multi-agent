@@ -84,19 +84,49 @@ def research_question(question: str) -> ResearchResult:
     structured evidence.
     """
 
-    response = client.responses.parse(
-        model="gpt-5.6-luna",
-        instructions=SYSTEM_PROMPT,
-        tools=[
-            {
-                "type": "web_search",
-            }
-        ],
-        input=question,
-        text_format=ResearchResult,
-    )
+    try:
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            instructions=SYSTEM_PROMPT,
+            tools=[
+                {
+                    "type": "web_search",
+                }
+            ],
+            input=question,
+            text_format=ResearchResult,
+        )
 
-    return response.output_parsed
+        return response.output_parsed
+
+    except Exception as e:
+        error_text = str(e)
+
+        if (
+            "insufficient_quota" in error_text
+            or "credit_balance_exhausted" in error_text
+        ):
+            print()
+            print("=" * 70)
+            print("RESEARCH AGENT — LIVE RESEARCH UNAVAILABLE")
+            print("=" * 70)
+            print("Reason: OpenAI API credit balance exhausted.")
+
+            return ResearchResult(
+                summary=(
+                    "Live external research could not be completed "
+                    "because the research API is currently unavailable."
+                ),
+                claims=[],
+                sources=[],
+                uncertainties=[
+                    "The Research Agent could not perform live web research.",
+                    "Current information could not be independently verified.",
+                ],
+                currentness="UNKNOWN",
+            )
+
+        raise
 
 
 def main():

@@ -124,7 +124,7 @@ def route_question(question: str) -> RouterDecision:
 
             q_lower = question.lower()
             emergency_info = detect_emergency_keywords(question)
-            if emergency_info.get("emergency_detected", False):
+            if emergency_info.get("emergency", False):
                 return RouterDecision(
                     faculty_rag=False,
                     current_research=False,

@@ -1,9 +1,8 @@
-import os
+import json
+import urllib.request
 
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from backend.config import OPENAI_API_KEY
 from backend.safety.emergency_rules import detect_emergency_keywords
 
 
@@ -11,11 +10,13 @@ from backend.safety.emergency_rules import detect_emergency_keywords
 # SETTINGS
 # ============================================================
 
-MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
+# ============================================================
+# ROUTER SYSTEM PROMPT
+# ============================================================
 
 SYSTEM_PROMPT = """
 You are the Router/Triage Agent for a cancer information
@@ -80,8 +81,29 @@ IMPORTANT:
   takes priority.
 - You may select multiple agents.
 - Give a short reason for every selected route.
+
+Return ONLY valid JSON.
+
+The JSON must have exactly these fields:
+
+{
+  "faculty_rag": true or false,
+  "current_research": true or false,
+  "emergency": true or false,
+  "synthesis": true or false,
+  "verification": true or false,
+  "intent": "short intent name",
+  "reason": "short reason",
+  "confidence": "HIGH, MEDIUM, or LOW",
+  "priority": "HIGH or NORMAL",
+  "missing_information": ["item1", "item2"]
+}
 """
 
+
+# ============================================================
+# STRUCTURED ROUTER DECISION
+# ============================================================
 
 class RouterDecision(BaseModel):
     faculty_rag: bool = False
@@ -103,77 +125,163 @@ class RouterDecision(BaseModel):
     )
 
 
+# ============================================================
+# OLLAMA CALL
+# ============================================================
+
+def ask_ollama(prompt: str) -> str:
+    payload = {
+        "model": MODEL_NAME,
+        "system": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]
+
+
+# ============================================================
+# ROUTER
+# ============================================================
+
 def route_question(question: str) -> RouterDecision:
-    try:
-        response = client.responses.parse(
-            model=MODEL_NAME,
-            instructions=SYSTEM_PROMPT,
-            input=question,
-            text_format=RouterDecision,
+
+    # --------------------------------------------------------
+    # SAFETY-FIRST CHECK
+    # --------------------------------------------------------
+    #
+    # Emergency detection happens BEFORE the LLM.
+    # This means an emergency can still be routed safely
+    # even if Ollama is unavailable.
+    #
+
+    emergency_info = detect_emergency_keywords(question)
+
+    if emergency_info.get("emergency", False):
+
+        print()
+        print("=" * 70)
+        print("ROUTER TRIAGE — DETERMINISTIC EMERGENCY ROUTING")
+        print("=" * 70)
+        print("Action: Emergency safety pattern detected.")
+        print("Emergency routing takes priority over LLM classification.")
+
+        return RouterDecision(
+            faculty_rag=False,
+            current_research=False,
+            emergency=True,
+            synthesis=True,
+            verification=True,
+            intent="emergency",
+            reason="Deterministic emergency safety pattern detected.",
+            confidence="HIGH",
+            priority="HIGH",
         )
-        return response.output_parsed
+
+    # --------------------------------------------------------
+    # NORMAL LLM ROUTING
+    # --------------------------------------------------------
+
+    try:
+
+        raw_response = ask_ollama(question)
+
+        print()
+        print("=" * 70)
+        print("ROUTER / QWEN RESPONSE")
+        print("=" * 70)
+        print(raw_response)
+
+        parsed = json.loads(raw_response)
+
+        decision = RouterDecision.model_validate(parsed)
+
+        return decision
+
     except Exception as e:
-        error_text = str(e)
-        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
-            print()
-            print("=" * 70)
-            print("ROUTER TRIAGE — LLM CLASSIFICATION UNAVAILABLE")
-            print("=" * 70)
-            print("Reason: OpenAI API credit balance exhausted.")
-            print("Action: Applying deterministic safety and intent rules.")
 
-            q_lower = question.lower()
-            emergency_info = detect_emergency_keywords(question)
-            if emergency_info.get("emergency", False):
-                return RouterDecision(
-                    faculty_rag=False,
-                    current_research=False,
-                    emergency=True,
-                    synthesis=True,
-                    verification=True,
-                    intent="emergency",
-                    reason="Deterministic emergency safety pattern detected.",
-                    confidence="HIGH",
-                    priority="HIGH",
-                )
+        print()
+        print("=" * 70)
+        print("ROUTER TRIAGE — LLM CLASSIFICATION UNAVAILABLE")
+        print("=" * 70)
+        print(f"Reason: {e}")
+        print("Action: Applying deterministic intent rules.")
 
-            temporal_keywords = [
-                "latest", "current", "recent", "newest", "2026",
-                "fda approval", "fda-approved", "new approved"
-            ]
-            is_temporal = any(kw in q_lower for kw in temporal_keywords)
+        # ----------------------------------------------------
+        # DETERMINISTIC FALLBACK
+        # ----------------------------------------------------
 
-            if is_temporal:
-                return RouterDecision(
-                    faculty_rag=True,
-                    current_research=True,
-                    emergency=False,
-                    synthesis=True,
-                    verification=True,
-                    intent="current_research",
-                    reason="Question involves recent updates alongside foundational knowledge.",
-                    confidence="HIGH",
-                    priority="NORMAL",
-                )
+        q_lower = question.lower()
+
+        temporal_keywords = [
+            "latest",
+            "current",
+            "recent",
+            "newest",
+            "updated",
+            "2026",
+            "fda approval",
+            "fda-approved",
+            "new approved",
+        ]
+
+        is_temporal = any(
+            keyword in q_lower
+            for keyword in temporal_keywords
+        )
+
+        if is_temporal:
 
             return RouterDecision(
                 faculty_rag=True,
-                current_research=False,
+                current_research=True,
                 emergency=False,
                 synthesis=True,
                 verification=True,
-                intent="faculty_knowledge",
-                reason="Standard oncology guideline query routed to faculty knowledge base.",
+                intent="current_research",
+                reason=(
+                    "Question involves recent updates alongside "
+                    "foundational knowledge."
+                ),
                 confidence="HIGH",
                 priority="NORMAL",
             )
-        else:
-            raise
 
+        return RouterDecision(
+            faculty_rag=True,
+            current_research=False,
+            emergency=False,
+            synthesis=True,
+            verification=True,
+            intent="faculty_knowledge",
+            reason=(
+                "Standard oncology query routed to the "
+                "faculty knowledge base."
+            ),
+            confidence="HIGH",
+            priority="NORMAL",
+        )
+
+
+# ============================================================
+# TEST
+# ============================================================
 
 def main():
 
     test_questions = [
+
         "What are the risk factors for melanoma?",
 
         "What is the latest FDA-approved treatment for melanoma "
@@ -220,8 +328,10 @@ def main():
         print(decision.reason)
 
         if decision.missing_information:
+
             print()
             print("Missing Information:")
+
             for item in decision.missing_information:
                 print(f"- {item}")
 

@@ -76,6 +76,11 @@ def verification_node(state: AgentState) -> AgentState:
         evidence=evidence,
     )
 
+    print()
+    print("=== RAW VERIFIER RESULT ===")
+    print(verification_result)
+    print("=== END RAW VERIFIER RESULT ===")
+
     state["verification"] = verification_result
 
     # Extract the overall verdict from the structured text
@@ -84,8 +89,28 @@ def verification_node(state: AgentState) -> AgentState:
 
     if "VERDICT: PASS" in verification_upper:
         state["verification_status"] = "PASS"
+
     elif "VERDICT: FAIL" in verification_upper:
         state["verification_status"] = "FAIL"
+
+    elif "FINAL VERDICT" in verification_upper:
+        if (
+            "UNSUPPORTED" in verification_upper
+            or "PROBLEMATIC" in verification_upper
+        ):
+            state["verification_status"] = "FAIL"
+        else:
+            state["verification_status"] = "PASS"
+
+    elif "CONCLUSION:" in verification_upper:
+        if (
+            "UNSUPPORTED" in verification_upper
+            or "PROBLEMATIC" in verification_upper
+        ):
+            state["verification_status"] = "FAIL"
+        else:
+            state["verification_status"] = "PASS"
+
     else:
         state["verification_status"] = "UNKNOWN"
 

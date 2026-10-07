@@ -1,146 +1,212 @@
-import React from 'react';
-import { BookOpen, Globe, ExternalLink, FileText, Calendar, Layers, Shield } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  BookOpen,
+  Globe,
+  ExternalLink,
+  FileText,
+  Calendar,
+  Layers,
+  Shield,
+  ChevronDown,
+} from 'lucide-react';
 
 /**
- * SourcesPanel renders the cited evidence grouped by category:
- * - Faculty Knowledge (Grounded clinical PDFs/curriculum)
- * - Current External Research (Live medical literature & trials)
+ * SourcesPanel — categorised, collapsible evidence cards.
  *
- * @param {Object} props
- * @param {Array} props.sources - Array of source objects from the backend
+ * Sources are grouped into:
+ *  - Faculty Knowledge Base  (source_category === 'faculty_knowledge' or has document)
+ *  - Current External Research (source_category === 'current_external_research')
+ *  - Other
  */
 export default function SourcesPanel({ sources = [] }) {
   if (!sources || sources.length === 0) {
     return (
       <div className="empty-state-card">
         <Shield size={36} />
-        <p>No external citations retrieved for this response.</p>
-        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          Direct safety responses or internal triage workflows do not attach reference documents.
+        <p>No external citations for this response.</p>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+          Direct safety responses and internal triage workflows do not attach reference documents.
         </span>
       </div>
     );
   }
 
-  // Categorize sources
   const facultySources = sources.filter(
-    (s) => s.source_category === 'faculty_knowledge' || (!s.source_category && s.document)
+    (s) =>
+      s.source_category === 'faculty_knowledge' ||
+      (!s.source_category && s.document)
   );
 
   const researchSources = sources.filter(
-    (s) => s.source_category === 'current_external_research' || (!s.source_category && !s.document)
+    (s) =>
+      s.source_category === 'current_external_research' ||
+      (!s.source_category && s.url && !s.document)
   );
 
   const otherSources = sources.filter(
-    (s) =>
-      s.source_category !== 'faculty_knowledge' &&
-      s.source_category !== 'current_external_research' &&
-      !facultySources.includes(s) &&
-      !researchSources.includes(s)
+    (s) => !facultySources.includes(s) && !researchSources.includes(s)
   );
 
   return (
     <div className="sources-list-container">
-      {/* Faculty Knowledge Group */}
+      {/* Faculty Knowledge */}
       {facultySources.length > 0 && (
         <div className="source-category-group">
           <div className="category-group-header faculty">
-            <BookOpen size={16} />
-            <span>Faculty Knowledge Base ({facultySources.length})</span>
+            <BookOpen size={14} />
+            <span>Faculty Knowledge Base</span>
+            <span className="group-count">{facultySources.length}</span>
           </div>
-
           {facultySources.map((source, idx) => (
-            <div key={`faculty-${idx}`} className="source-card">
-              <div className="source-card-title-row">
-                <span className="source-card-title">
-                  {source.title || source.document || `Faculty Source #${idx + 1}`}
-                </span>
-                <span className="prompt-badge faculty">Faculty RAG</span>
-              </div>
-
-              <div className="source-meta-row">
-                {source.document && (
-                  <span className="source-meta-tag" title="Source Document">
-                    <FileText size={11} style={{ display: 'inline', marginRight: 3 }} />
-                    {source.document}
-                  </span>
-                )}
-                {(source.page_start !== undefined || source.page_end !== undefined) && (
-                  <span className="source-meta-tag" title="Page Range">
-                    <Layers size={11} style={{ display: 'inline', marginRight: 3 }} />
-                    Pages {source.page_start || '1'}–{source.page_end || source.page_start || '1'}
-                  </span>
-                )}
-                {source.source_year && (
-                  <span className="source-meta-tag" title="Publication Year">
-                    <Calendar size={11} style={{ display: 'inline', marginRight: 3 }} />
-                    {source.source_year}
-                  </span>
-                )}
-              </div>
-
-              {source.snippet && (
-                <div className="source-snippet-box">
-                  "{source.snippet}"
-                </div>
-              )}
-            </div>
+            <EvidenceCard
+              key={`faculty-${idx}`}
+              source={source}
+              type="faculty"
+              index={idx}
+            />
           ))}
         </div>
       )}
 
-      {/* Current External Research Group */}
+      {/* External Research */}
       {researchSources.length > 0 && (
         <div className="source-category-group">
           <div className="category-group-header research">
-            <Globe size={16} />
-            <span>Current External Research ({researchSources.length})</span>
+            <Globe size={14} />
+            <span>Current External Research</span>
+            <span className="group-count">{researchSources.length}</span>
           </div>
-
           {researchSources.map((source, idx) => (
-            <div key={`research-${idx}`} className="source-card">
-              <div className="source-card-title-row">
-                <span className="source-card-title">
-                  {source.title || `Research Publication #${idx + 1}`}
-                </span>
-                <span className="prompt-badge research">Live Literature</span>
-              </div>
-
-              {source.snippet && (
-                <div className="source-snippet-box">
-                  "{source.snippet}"
-                </div>
-              )}
-
-              {source.url && (
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="source-link-btn"
-                >
-                  <ExternalLink size={12} />
-                  <span>View External Source</span>
-                </a>
-              )}
-            </div>
+            <EvidenceCard
+              key={`research-${idx}`}
+              source={source}
+              type="research"
+              index={idx}
+            />
           ))}
         </div>
       )}
 
-      {/* Other Sources if present */}
-      {otherSources.map((source, idx) => (
-        <div key={`other-${idx}`} className="source-card">
-          <div className="source-card-title-row">
-            <span className="source-card-title">{source.title || `Evidence #${idx + 1}`}</span>
+      {/* Other sources */}
+      {otherSources.length > 0 && (
+        <div className="source-category-group">
+          <div className="category-group-header" style={{ color: 'var(--text-secondary)' }}>
+            <Layers size={14} />
+            <span>Other Sources</span>
+            <span className="group-count">{otherSources.length}</span>
           </div>
-          {source.snippet && (
-            <div className="source-snippet-box">
-              "{source.snippet}"
-            </div>
-          )}
+          {otherSources.map((source, idx) => (
+            <EvidenceCard
+              key={`other-${idx}`}
+              source={source}
+              type="other"
+              index={idx}
+            />
+          ))}
         </div>
-      ))}
+      )}
+    </div>
+  );
+}
+
+/**
+ * EvidenceCard — individual collapsible source item.
+ */
+function EvidenceCard({ source, type, index }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasSnippet = !!source.snippet;
+  const hasUrl     = !!source.url;
+  const hasExtra   = hasSnippet || hasUrl;
+
+  const title =
+    source.title ||
+    source.document ||
+    `${type === 'research' ? 'Research Publication' : 'Evidence Source'} #${index + 1}`;
+
+  return (
+    <div className="evidence-card">
+      {/* Header row — always visible */}
+      <div
+        className="evidence-card-header"
+        onClick={() => hasExtra && setExpanded((v) => !v)}
+        style={{ cursor: hasExtra ? 'pointer' : 'default' }}
+      >
+        <div className="evidence-card-main">
+          {/* Title + badge */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', justifyContent: 'space-between' }}>
+            <span className="evidence-card-title">{title}</span>
+            <span className={`prompt-badge ${type === 'faculty' ? 'faculty' : type === 'research' ? 'research' : ''}`}
+              style={{ flexShrink: 0, marginTop: 1 }}>
+              {type === 'faculty' ? 'Faculty' : type === 'research' ? 'Research' : 'Source'}
+            </span>
+          </div>
+
+          {/* Meta tags */}
+          <div className="evidence-meta-row">
+            {source.document && source.document !== title && (
+              <span className="evidence-meta-tag">
+                <FileText size={10} />
+                {source.document}
+              </span>
+            )}
+            {(source.page_start !== undefined || source.page_end !== undefined) && (
+              <span className="evidence-meta-tag">
+                <Layers size={10} />
+                {source.page_start !== undefined && source.page_end !== undefined && source.page_start !== source.page_end
+                  ? `Pp. ${source.page_start}–${source.page_end}`
+                  : `P. ${source.page_start ?? source.page_end}`}
+              </span>
+            )}
+            {source.source_year && (
+              <span className="evidence-meta-tag">
+                <Calendar size={10} />
+                {source.source_year}
+              </span>
+            )}
+            {source.source_category && (
+              <span className="evidence-meta-tag" style={{ textTransform: 'capitalize' }}>
+                {source.source_category.replace(/_/g, ' ')}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Expand toggle */}
+        {hasExtra && (
+          <div className="evidence-card-actions">
+            <button
+              className={`evidence-expand-btn ${expanded ? 'open' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-label={expanded ? 'Collapse evidence' : 'Expand evidence'}
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Collapsible body */}
+      {hasExtra && (
+        <div className={`evidence-card-snippet ${expanded ? 'open' : ''}`}>
+          <div className="evidence-snippet-inner">
+            {hasSnippet && (
+              <div className="snippet-text">"{source.snippet}"</div>
+            )}
+            {hasUrl && (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="source-link-btn"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink size={11} />
+                <span>View External Source</span>
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

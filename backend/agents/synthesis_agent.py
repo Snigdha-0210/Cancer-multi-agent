@@ -1,9 +1,9 @@
-from openai import OpenAI
+import json
+import urllib.request
 
-from backend.config import OPENAI_API_KEY
 
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
 SYSTEM_PROMPT = """
@@ -64,6 +64,28 @@ Do not expose internal chain-of-thought or hidden reasoning.
 """
 
 
+def ask_ollama(system_prompt: str, user_prompt: str) -> str:
+
+    payload = {
+        "model": MODEL_NAME,
+        "system": system_prompt,
+        "prompt": user_prompt,
+        "stream": False,
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]
+
+
 def synthesize_answer(
     question: str,
     faculty_evidence: str = "",
@@ -107,55 +129,46 @@ Requirements:
 """
 
     try:
-        response = client.responses.create(
-            model="gpt-5.6-luna",
-            instructions=SYSTEM_PROMPT,
-            input=user_prompt,
+        return ask_ollama(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
         )
 
-        return response.output_text
-
     except Exception as e:
-        error_text = str(e)
 
-        if (
-            "insufficient_quota" in error_text
-            or "credit_balance_exhausted" in error_text
-        ):
-            print()
-            print("=" * 70)
-            print("SYNTHESIS AGENT — LLM GENERATION UNAVAILABLE")
-            print("=" * 70)
-            print("Reason: OpenAI API credit balance exhausted.")
+        print()
+        print("=" * 70)
+        print("SYNTHESIS AGENT — LOCAL MODEL UNAVAILABLE")
+        print("=" * 70)
+        print(f"Reason: {e}")
 
-            # Deterministic fallback for offline development/testing.
-            if emergency_evidence.strip():
-                return (
-                    "This is an emergency situation. "
-                    "Please seek immediate human help."
-                )
+        # Deterministic fallback for offline development/testing.
 
-            if research_evidence.strip():
-                return (
-                    "Current external research was requested, but "
-                    "the answer-generation model is currently unavailable. "
-                    "The available research evidence should be verified "
-                    "before presenting a current medical answer."
-                )
-
-            if faculty_evidence.strip():
-                return (
-                    "The faculty knowledge base contains relevant "
-                    "evidence for this question, but the answer-generation "
-                    "model is currently unavailable."
-                )
-
+        if emergency_evidence.strip():
             return (
-                "I could not generate an answer because the "
-                "available answer-generation model is currently unavailable."
+                "This is an emergency situation. "
+                "Please seek immediate human help."
             )
 
-        raise
+        if research_evidence.strip():
+            return (
+                "Current external research was requested, but "
+                "the answer-generation model is currently unavailable. "
+                "The available research evidence should be verified "
+                "before presenting a current medical answer."
+            )
+
+        if faculty_evidence.strip():
+            return (
+                "The faculty knowledge base contains relevant "
+                "evidence for this question, but the answer-generation "
+                "model is currently unavailable."
+            )
+
+        return (
+            "I could not generate an answer because the "
+            "available answer-generation model is currently unavailable."
+        )
 
 
 def main():

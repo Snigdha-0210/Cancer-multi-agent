@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, BookOpen, Globe, AlertTriangle, CornerDownLeft } from 'lucide-react';
+import { Send, Sparkles, BookOpen, Globe, AlertTriangle } from 'lucide-react';
 
 const QUICK_PROMPTS = [
   {
@@ -9,19 +9,19 @@ const QUICK_PROMPTS = [
     category: 'faculty',
   },
   {
-    label: 'Latest 2026 Immunotherapy',
+    label: 'Latest Immunotherapy',
     text: 'What are the latest 2026 immunotherapy clinical trial findings for advanced oncology patients?',
     icon: Globe,
     category: 'research',
   },
   {
-    label: 'Chemotherapy Side Effects',
+    label: 'Chemo Side Effects',
     text: 'What are common side effects associated with chemotherapy regimens and how are they managed?',
     icon: BookOpen,
     category: 'faculty',
   },
   {
-    label: 'Emergency / Urgent Safety',
+    label: 'Emergency / Urgent',
     text: 'I am experiencing sudden severe shortness of breath and chest pain after chemotherapy.',
     icon: AlertTriangle,
     category: 'emergency',
@@ -29,7 +29,7 @@ const QUICK_PROMPTS = [
 ];
 
 /**
- * ChatInput handles user text query entry and quick clinical suggestions.
+ * ChatInput — question input bar with quick clinical suggestion chips.
  *
  * @param {Object} props
  * @param {Function} props.onSend - Submit callback (question: string)
@@ -69,18 +69,16 @@ export default function ChatInput({ onSend, isLoading, mode = 'mock' }) {
   const handleSelectQuickPrompt = (promptText) => {
     if (isLoading) return;
     setInput(promptText);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    textareaRef.current?.focus();
   };
 
   return (
     <div className="chat-input-section">
       <div className="chat-input-wrapper">
-        {/* Quick Suggestion Chips */}
+        {/* Quick suggestion chips */}
         <div className="quick-chips-row">
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Sparkles size={12} style={{ color: 'var(--accent-cyan)' }} />
+          <span className="chips-label">
+            <Sparkles size={11} style={{ color: 'var(--accent-cyan)' }} />
             Suggested:
           </span>
           {QUICK_PROMPTS.map((item, idx) => {
@@ -89,18 +87,19 @@ export default function ChatInput({ onSend, isLoading, mode = 'mock' }) {
               <button
                 key={idx}
                 type="button"
-                className="quick-chip-btn"
+                className={`quick-chip-btn ${item.category}`}
                 onClick={() => handleSelectQuickPrompt(item.text)}
                 disabled={isLoading}
+                title={item.text}
               >
-                <Icon size={12} />
+                <Icon size={11} />
                 <span>{item.label}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Input Box Form */}
+        {/* Input form */}
         <form onSubmit={handleSubmit} className="input-form-box">
           <textarea
             ref={textareaRef}
@@ -110,11 +109,12 @@ export default function ChatInput({ onSend, isLoading, mode = 'mock' }) {
             onKeyDown={handleKeyDown}
             placeholder={
               isLoading
-                ? 'Processing multi-agent clinical pipeline...'
+                ? 'Processing multi-agent pipeline...'
                 : 'Ask a cancer research, clinical guideline, or patient care question...'
             }
             disabled={isLoading}
             className="input-textarea"
+            aria-label="Clinical question input"
           />
 
           <div className="input-actions">
@@ -125,13 +125,17 @@ export default function ChatInput({ onSend, isLoading, mode = 'mock' }) {
               title="Send question (Enter)"
               aria-label="Send question"
             >
-              <Send size={16} />
+              <Send size={15} />
             </button>
           </div>
         </form>
 
+        {/* Helper text */}
         <div className="input-helper-text">
-          <span>Press <strong>Enter</strong> to submit, <strong>Shift + Enter</strong> for a new line</span>
+          <span>
+            Press <strong>Enter</strong> to submit,{' '}
+            <strong>Shift + Enter</strong> for new line
+          </span>
           <span>
             {mode === 'mock'
               ? 'Development simulation — no live evidence retrieved'

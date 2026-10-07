@@ -1,18 +1,13 @@
-import os
-
-from openai import OpenAI
-
-from backend.config import OPENAI_API_KEY
+import json
+import urllib.request
 
 
 # ============================================================
 # SETTINGS
 # ============================================================
 
-MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
 SYSTEM_PROMPT = """
@@ -80,6 +75,28 @@ RECOMMENDED ACTION:
 """
 
 
+def ask_ollama(system_prompt: str, user_prompt: str) -> str:
+
+    payload = {
+        "model": MODEL_NAME,
+        "system": system_prompt,
+        "prompt": user_prompt,
+        "stream": False,
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]
+
+
 def verify_answer(
     question: str,
     proposed_answer: str,
@@ -116,24 +133,38 @@ Pay particular attention to:
 - whether the answer makes claims that the evidence does not
   support
 
+IMPORTANT:
+
+Do not use your own medical knowledge to replace missing
+information.
+
+Judge the proposed answer ONLY against the supplied evidence.
+
+If a claim is not supported by the evidence, mark it as
+UNSUPPORTED OR PROBLEMATIC.
+
+If important information is missing, list it under
+MISSING INFORMATION.
+
 Return your verification using the exact structure requested
 in the system instructions.
 """
 
     try:
-        response = client.responses.create(
-            model=MODEL_NAME,
-            instructions=SYSTEM_PROMPT,
-            input=user_prompt,
+        return ask_ollama(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
         )
 
-        return response.output_text
-
     except Exception as e:
-        error_text = str(e)
 
-        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
-            return """VERDICT: UNKNOWN
+        print()
+        print("=" * 70)
+        print("VERIFICATION AGENT — LOCAL MODEL UNAVAILABLE")
+        print("=" * 70)
+        print(f"Reason: {e}")
+
+        return """VERDICT: UNKNOWN
 
 CONFIDENCE: LOW
 
@@ -147,10 +178,8 @@ MISSING INFORMATION:
 - Live verification by the Verification Agent.
 
 RECOMMENDED ACTION:
-- RESEARCH: obtain verification from the Verification Agent when the API is available.
+- RESEARCH: obtain verification from the Verification Agent when the model is available.
 """
-
-        raise
 
 
 def main():
@@ -159,6 +188,11 @@ def main():
         "What is the latest FDA-approved treatment for melanoma "
         "in 2026?"
     )
+
+    # Deliberately incorrect answer.
+    #
+    # This lets us test whether the Verification Agent catches
+    # unsupported generalizations.
 
     proposed_answer = """
 Tudriqev is the standard first-line treatment for all melanoma

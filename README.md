@@ -10,6 +10,8 @@
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph_StateGraph-4F46E5?style=for-the-badge&logo=diagram&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React 19](https://img.shields.io/badge/Frontend-React_19_+_Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Local LLM](https://img.shields.io/badge/Local_LLM-Ollama_+_Qwen3:8b-000000?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/)
+[![Web Search](https://img.shields.io/badge/Search_Tool-DuckDuckGo_DDGS-de5833?style=for-the-badge&logo=duckduckgo&logoColor=white)](https://pypi.org/project/duckduckgo-search/)
 [![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Local_Vector_DB-DC2626?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
 [![Embeddings](https://img.shields.io/badge/Embeddings-384--dim_MiniLM--L6--v2-FF6F00?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 [![Zero-PHI Compliant](https://img.shields.io/badge/Privacy-Zero--PHI_Compliant-059669?style=for-the-badge)](#-security-privacy--zero-phi-guarantee)
@@ -106,6 +108,7 @@ flowchart TD
     classDef verifStyle fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff7ed
     classDef finalStyle fill:#065f46,stroke:#34d399,stroke-width:2px,color:#ecfdf5
     classDef outStyle fill:#022c22,stroke:#059669,stroke-width:2px,color:#ecfdf5
+    classDef localModel fill:#181825,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4
 
     Start([🟢 User Inquiry]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
     
@@ -121,14 +124,27 @@ flowchart TD
     end
 
     Router -->|Intent: Emerging / 2026 Advances| ResearchNode[🌐 External Research Node<br><code>backend/graph/research_node.py</code>]:::resStyle
-    ResearchNode <--> WebSources[🔎 Authoritative Health Data<br><em>FDA, NCI, NIH, CDC, PubMed</em>]:::resStyle
+    
+    subgraph Research_Engine ["🔎 External Evidence Engine (Zero API Cost)"]
+        ResearchNode <--> DDGSearch[🦆 DuckDuckGo Search Tool<br><code>backend/tools/web_search.py</code><br><em>site:fda.gov • site:cancer.gov • site:nih.gov</em>]:::resStyle
+        ResearchNode <--> RecencyGuard[🛡️ Deterministic Recency Safeguard<br><em>CURRENT ➔ POSSIBLY_CURRENT</em>]:::resStyle
+    end
+
+    subgraph LLM_Runtime ["🤖 Multi-Model Inference Runtime"]
+        OllamaLocal[🦙 Local Ollama <code>qwen3:8b</code><br><em>Private, Offline, Zero-Cost</em>]:::localModel
+        CloudOpenAI[☁️ OpenAI API <code>gpt-5.6-luna</code><br><em>Optional Cloud Fallback</em>]:::localModel
+    end
+
+    ResearchNode -.-> LLM_Runtime
+    SynthesisNode -.-> LLM_Runtime
+    VerifierNode -.-> LLM_Runtime
 
     RAGNode -->|Conditional: If Recent Updates Required| ResearchNode
     RAGNode -->|Otherwise| SynthesisNode
     ResearchNode --> SynthesisNode
     
     %% Synthesis & Verification Loop
-    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code>]:::verifStyle
+    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code><br><em>Multi-Format Verdict Extraction</em>]:::verifStyle
 
     VerifierNode -->|Verdict: PASS| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code>]:::finalStyle
     VerifierNode -.->|Verdict: FAIL &amp; Attempts &lt; 2| ResearchNode
@@ -148,31 +164,38 @@ sequenceDiagram
     participant Router as 🧭 Router Node
     participant Emergency as 🚨 Emergency Node
     participant RAG as 📚 Faculty RAG Node
-    participant Research as 🌐 Research Agent
-    participant Synth as ⚖️ Synthesis Node
-    participant Verifier as 🔍 Verification Node
+    participant Tool as 🦆 DuckDuckGo Search Tool
+    participant Research as 🌐 Research Agent (Qwen3)
+    participant Synth as ⚖️ Synthesis Node (Qwen3)
+    participant Verifier as 🔍 Verification Node (Qwen3)
     participant Final as 📋 Final Node
 
-    User->>Router: "What are the latest 2026 treatments for metastatic melanoma?"
+    User->>Router: "What is the latest 2026 FDA approved treatment for melanoma?"
     
     Note over Router: Deterministic screen: SAFE<br/>Classification: faculty_rag=True, current_research=True
     
     par Evidence Retrieval
         Router->>RAG: Query 31,498 indexed faculty knowledge units
-        RAG-->>Synth: Historical Context (e.g., 2010 guidelines: Interferon alfa-2b / IL-2)
+        RAG-->>Synth: Historical Context (e.g., 2018 guideline baseline)
     and
-        Router->>Research: Live web search for recent approvals
-        Research-->>Synth: 2026 Approvals (e.g., FDA accelerated approval of Tudriqev + Nivolumab)
+        Router->>Research: Query with authoritative domain filters
+        Research->>Tool: search_web("melanoma site:fda.gov", max_results=5)
+        Tool-->>Research: FDA accelerated approval snippets (Tudriqev 2026)
+        Note over Research: Apply Rules 15-16 & Deterministic Safeguard:<br/>Downgrade CURRENT ➔ POSSIBLY_CURRENT
+        Research-->>Synth: Structured Evidence (claims + URLs + recency caveats)
     end
 
-    Synth->>Synth: Synthesize response explicitly differentiating 2010 baseline from 2026 therapies
+    Synth->>Synth: Synthesize response explicitly differentiating 2018 baseline from 2026 therapies
     Synth->>Verifier: Submit proposed draft + raw retrieved evidence
+    Note over Verifier: Audit claims against evidence; extract verdict via resilient parser
 
     alt Verification PASS
         Verifier->>Final: Verdict PASS (Confidence: HIGH)
         Final-->>User: Verified Response + Verification Badge + Page Citations
     else Verification FAIL (Attempts < 2)
         Verifier->>Research: Flag unsupported claim & request targeted evidence
+        Research->>Tool: Targeted query with secondary sources
+        Tool-->>Research: Refined clinical trial evidence
         Research-->>Synth: Refined clinical trial evidence
         Synth->>Verifier: Resubmitted revised draft
         Verifier->>Final: Verdict PASS
@@ -188,12 +211,12 @@ Each agent possesses an isolated domain boundary, structured Pydantic input/outp
 
 | Agent Persona | File Path | Core Role & Operational Mechanics | Grounding Source |
 | :--- | :--- | :--- | :--- |
-| **🧭 Router & Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Performs deterministic keyword safety screening followed by LLM intent classification; outputs a typed `RouterDecision` configuring the graph path. | Regex rules + Structured LLM Classifier |
-| **🚨 Emergency & Safety Agent** | `backend/agents/emergency_agent.py`<br>`backend/safety/emergency_rules.py` | Detects self-harm keywords, severe depression, and acute medical red flags; provides immediate de-escalation, 988 lifeline contacts, and ER instructions. | Deterministic Regex + Safe De-escalation Protocol |
+| **🧭 Router & Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Performs deterministic keyword safety screening followed by LLM intent classification (local Qwen3 or OpenAI); outputs a typed `RouterDecision` configuring the graph path. | Regex rules + Structured LLM Classifier |
+| **🚨 Emergency & Safety Agent** | `backend/agents/emergency_agent.py`<br>`backend/safety/emergency_rules.py` | Detects self-harm keywords, severe depression, and acute medical red flags; provides immediate de-escalation, 988 lifeline contacts, and ER instructions with zero-latency offline fallback. | Deterministic Regex + Safe De-escalation Protocol |
 | **📚 Faculty RAG Agent** | `backend/rag/rag_agent.py`<br>`backend/graph/rag_node.py` | Queries local persistent Qdrant vector database, extracts semantic knowledge units with page/chapter/section tracking, and flags source publication dates. | Local Qdrant Store (`cancer_faculty_knowledge`) |
-| **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/graph/research_node.py` | Researches 2026 therapy approvals, ongoing clinical trials, and regulatory updates using authoritative biomedical sources. | Live Web Search + FDA/NCI/NIH/CDC Databases |
-| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Integrates multi-source evidence into compassionate, medically coherent answers; explicitly contrasts historical standards with modern therapies. | Provided Evidence Payloads Only |
-| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Fact-checks every sentence against raw retrieved chunks; identifies ungrounded claims, missing contraindications, and triggers graph retry loops. | Raw Retrieved Context Chunks |
+| **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/tools/web_search.py`<br>`backend/graph/research_node.py` | Free DuckDuckGo multi-domain search (`site:fda.gov`, `site:cancer.gov`, `site:nih.gov`), deduplication, conservative currentness rules (Rules 15 & 16), and deterministic recency safeguard (`CURRENT` ➔ `POSSIBLY_CURRENT`). | DuckDuckGo DDGS + FDA/NCI/NIH/CDC Databases |
+| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Integrates multi-source evidence into compassionate, medically coherent answers via local Qwen3/OpenAI; explicitly contrasts historical standards with modern therapies. | Provided Evidence Payloads Only |
+| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Fact-checks every sentence against raw retrieved chunks via local Qwen3/OpenAI; uses resilient multi-pattern verdict parsing (`VERDICT: PASS/FAIL`, `FINAL VERDICT`, `CONCLUSION:`). | Raw Retrieved Context Chunks |
 | **📋 Final Response Builder** | `backend/graph/final_node.py` | Assembles final response payload, deduplicates citations, calculates execution latency, and formats agent trace logs for UI display. | Global `AgentState` |
 
 ---
@@ -355,7 +378,15 @@ The **Verification Agent** (`backend/agents/verifier_agent.py`) audits the synth
   UNSUPPORTED_CLAIMS: []
   RECOMMENDED_ACTION: PASS
   ```
+- **Resilient Multi-Format Verdict Extraction (`backend/graph/verification_node.py`)**:
+  - `VERDICT: PASS` ➔ `PASS`
+  - `VERDICT: FAIL` ➔ `FAIL`
+  - `FINAL VERDICT` / `CONCLUSION:` ➔ checks for `UNSUPPORTED` or `PROBLEMATIC` claims, setting `FAIL` if present or `PASS` otherwise.
+  - Fallback to `UNKNOWN` if no recognized format is found.
 - If the verdict is `FAIL` and attempts < `MAX_VERIFICATION_ATTEMPTS` (2), the graph automatically loops back to the Research Agent for targeted evidence collection.
+- **Deterministic Currentness Safeguard (`backend/agents/research_agent.py`)**:
+  - Automatically identifies recency keywords (`"latest"`, `"current"`, `"newest"`, `"most recent"`, `"up-to-date"`).
+  - Intercepts LLM evaluations claiming `CURRENT` and conservatively normalizes them to `POSSIBLY_CURRENT` unless absolute exhaustiveness can be proven, appending clinical uncertainty notices.
 
 ---
 
@@ -415,9 +446,13 @@ cancer-multi-agent/
 │   ├── main.py                         # FastAPI application entry point
 │   ├── mock_workflow.py                # Development mock workflow
 │   │
+│   ├── tools/                          # Autonomous Search & Retrieval Tools
+│   │   ├── __init__.py
+│   │   └── web_search.py               # Free DuckDuckGo search with domain filtering
+│   │
 │   ├── agents/                         # Autonomous Specialized Agent Personas
 │   │   ├── emergency_agent.py          # Safety & crisis de-escalation agent
-│   │   ├── research_agent.py           # Live biomedical research agent
+│   │   ├── research_agent.py           # Live biomedical research agent (Qwen3 / DuckDuckGo)
 │   │   ├── router_agent.py             # Intent triage & graph dispatch agent
 │   │   ├── synthesis_agent.py          # Evidence synthesis & consensus agent
 │   │   └── verifier_agent.py           # Fact-checking & hallucination verifier
@@ -430,8 +465,9 @@ cancer-multi-agent/
 │   │   ├── rag_node.py                 # Faculty RAG vector retrieval node
 │   │   ├── research_node.py            # External web research node
 │   │   ├── synthesis_node.py           # Consensus synthesis node
-│   │   ├── verification_node.py        # Verification node with retry counter
+│   │   ├── verification_node.py        # Verification node with resilient parsing & retry
 │   │   ├── final_node.py               # Response aggregation & citation formatting
+│   │   ├── workflow_invoke_test.py     # Live LangGraph invocation tester
 │   │   ├── mock_workflow.py            # Offline simulated graph workflow
 │   │   ├── emergency_node_test_offline.py  # Offline emergency safety test
 │   │   ├── rag_node_test_offline.py        # Offline RAG node test
@@ -462,6 +498,11 @@ cancer-multi-agent/
 │       ├── embed_all_chunks.py         # Full 31,498-chunk batch embedding pipeline
 │       ├── retrieval_test.py           # Semantic retrieval verification runner
 │       └── rag_agent.py                # Standalone Faculty RAG agent
+│
+├── tests/                              # Diagnostic & Local Model Test Suites
+│   ├── README.md
+│   └── ollama/                         # Local Ollama & Qwen3 integration tests
+│       └── test_qwen.py                # Qwen3:8b local Ollama verification test
 │
 ├── data/                               # Knowledge base & data artifacts (managed)
 │   ├── raw_pdfs/                       # Source archives (Cancer_Type.zip, pdfs.zip)
@@ -496,6 +537,7 @@ cancer-multi-agent/
 ### 1. Prerequisites
 - **Python**: 3.11 or 3.12
 - **Node.js**: 18+ (for frontend)
+- **Ollama** (Optional for 100% private & free local inference): [Download Ollama](https://ollama.com/)
 - **Git**
 
 ### 2. Installation & Environment Setup
@@ -514,12 +556,15 @@ python -m venv .venv
 # On Linux / macOS:
 # source .venv/bin/activate
 
-# 3. Install backend dependencies
-pip install fastapi uvicorn pydantic openai sentence-transformers qdrant-client pypdf langgraph python-dotenv
+# 3. Install backend dependencies (including duckduckgo-search)
+pip install fastapi uvicorn pydantic openai sentence-transformers qdrant-client pypdf langgraph python-dotenv duckduckgo-search
 
-# 4. Configure environment variables
+# 4. Optional: Setup local model with Ollama (Zero API Costs)
+ollama run qwen3:8b
+
+# 5. Configure environment variables
 cp .env.example .env
-# Edit .env and insert your OPENAI_API_KEY
+# Edit .env and insert your configuration (or run in local Ollama / Mock mode)
 ```
 
 ---
@@ -554,13 +599,19 @@ python -m backend.rag.qdrant_store
 ### 4. Executing & Testing LangGraph Workflow
 
 ```bash
-# Test deterministic offline emergency guardrail
+# Test local Ollama Qwen3 connectivity:
+python -m tests.ollama.test_qwen
+
+# Test free DuckDuckGo search tool:
+python -m backend.tools.web_search
+
+# Test deterministic offline emergency guardrail:
 python -m backend.graph.emergency_node_test_offline
 
-# Test LangGraph StateGraph compiled structure
-python -m backend.graph.workflow
+# Run full live LangGraph workflow test:
+python -m backend.graph.workflow_invoke_test
 
-# Run simulated end-to-end mock workflow
+# Run simulated end-to-end mock workflow:
 python -m backend.mock_workflow
 ```
 

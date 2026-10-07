@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Activity } from 'lucide-react';
 import Header from './components/Header';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
@@ -14,10 +15,10 @@ export default function App() {
   const [error, setError] = useState(null);
   const [lastQuestion, setLastQuestion] = useState('');
   const [systemMode, setSystemMode] = useState('mock'); // 'mock' | 'live' | 'offline'
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isPanelOpen, setIsPanelOpen] = useState(() => window.innerWidth > 960);
   const [selectedMessage, setSelectedMessage] = useState(null);
 
-  // Check backend health on initial load
+  // Check backend health on load
   useEffect(() => {
     async function initHealth() {
       const health = await checkBackendHealth();
@@ -51,6 +52,11 @@ export default function App() {
       setLastQuestion(question);
       setError(null);
       setIsLoading(true);
+
+      // Open the inspector panel when a query starts (on desktop)
+      if (window.innerWidth > 960) {
+        setIsPanelOpen(true);
+      }
 
       try {
         const response = await askQuestion(question);
@@ -87,9 +93,7 @@ export default function App() {
   );
 
   const handleRetry = () => {
-    if (lastQuestion) {
-      handleSendMessage(lastQuestion);
-    }
+    if (lastQuestion) handleSendMessage(lastQuestion);
   };
 
   const handleClearChat = () => {
@@ -104,13 +108,16 @@ export default function App() {
     setIsPanelOpen(true);
   };
 
+  const handleClosePanel = () => setIsPanelOpen(false);
+  const handleTogglePanel = () => setIsPanelOpen((prev) => !prev);
+
   return (
     <div className="app-container">
       {/* Top Header */}
       <Header
         mode={systemMode}
         isPanelOpen={isPanelOpen}
-        onTogglePanel={() => setIsPanelOpen((prev) => !prev)}
+        onTogglePanel={handleTogglePanel}
         onClearChat={handleClearChat}
         messageCount={messages.length}
       />
@@ -139,11 +146,29 @@ export default function App() {
         {/* Right-Side Agent Activity & Evidence Panel */}
         <AgentActivity
           isOpen={isPanelOpen}
-          onClose={() => setIsPanelOpen(false)}
+          onClose={handleClosePanel}
           selectedMessage={selectedMessage}
           isLoading={isLoading}
         />
+
+        {/* Mobile backdrop overlay — visible via CSS media query on small screens */}
+        {isPanelOpen && (
+          <div
+            className="mobile-panel-backdrop"
+            onClick={handleClosePanel}
+          />
+        )}
       </main>
+
+      {/* Mobile FAB — opens inspector on small screens */}
+      <button
+        className="mobile-agent-fab"
+        onClick={handleTogglePanel}
+        aria-label="Toggle Agent Inspector"
+      >
+        <Activity size={15} />
+        <span>Inspector</span>
+      </button>
     </div>
   );
 }

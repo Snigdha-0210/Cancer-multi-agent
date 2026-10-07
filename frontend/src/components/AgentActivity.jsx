@@ -8,21 +8,23 @@ import {
   AlertTriangle,
   Cpu,
   ShieldCheck,
-  ChevronDown,
   Layers,
+  FileCheck,
   CheckCircle2,
-  HelpCircle,
-  FileCheck
+  Circle,
+  MinusCircle,
+  Loader2,
 } from 'lucide-react';
 import SourcesPanel from './SourcesPanel';
 import VerificationBadge from './VerificationBadge';
 
 /**
- * AgentActivity displays the visual multi-agent workflow pipeline
- * and evidence inspection for the selected conversation turn.
+ * AgentActivity — multi-agent workflow inspector and evidence panel.
  *
- * Pipeline Graph:
- * Router ➔ Faculty RAG / Research Agent / Emergency ➔ Synthesis Agent ➔ Verification Agent
+ * Pipeline:
+ *   Router → Faculty RAG / Research / Emergency → Synthesis → Verification
+ *
+ * Node states: 'loading' | 'completed' | 'skipped' | 'default'
  */
 export default function AgentActivity({
   isOpen,
@@ -30,297 +32,360 @@ export default function AgentActivity({
   selectedMessage,
   isLoading,
 }) {
-  const [activeTab, setActiveTab] = useState('pipeline'); // 'pipeline' | 'sources'
+  const [activeTab, setActiveTab] = useState('pipeline');
 
-  if (!isOpen) return null;
-
-  const agentsUsed = selectedMessage?.agents_used || [];
-  const route = selectedMessage?.route || {};
-  const sources = selectedMessage?.sources || [];
+  /* ── derive data from the selected response ── */
+  const agentsUsed      = selectedMessage?.agents_used || [];
+  const route           = selectedMessage?.route || {};
+  const sources         = selectedMessage?.sources || [];
   const verificationStatus = selectedMessage?.verification_status || 'UNKNOWN';
-  const attempts = selectedMessage?.verification_attempts || 1;
-  const isEmergency =
+  const attempts        = selectedMessage?.verification_attempts || 1;
+  const isEmergency     =
     route?.intent === 'emergency' ||
     route?.emergency === true ||
     agentsUsed.includes('emergency');
 
-  // Pipeline node definitions
-  const isRouterActive = agentsUsed.includes('router') || isLoading;
-  const isFacultyActive = agentsUsed.includes('faculty_rag') || route?.faculty_rag;
-  const isResearchActive = agentsUsed.includes('research') || route?.current_research;
-  const isEmergencyActive = isEmergency;
-  const isSynthesisActive = agentsUsed.includes('synthesis') || (agentsUsed.length > 0 && !isLoading);
-  const isVerificationActive = agentsUsed.includes('verification') || (agentsUsed.length > 0 && !isLoading);
+  /* ── node state helpers ── */
+  // When isLoading=true and no agents used yet, router is active.
+  // When response arrives, derive states from agentsUsed.
+  const hasResponse  = agentsUsed.length > 0 && !isLoading;
+  const hasAnything  = agentsUsed.length > 0 || isLoading;
+
+  function nodeState(isActive, loadingDefault = false) {
+    if (isLoading) {
+      // During loading: router is "loading", rest are "queued"
+      return loadingDefault ? 'loading' : 'queued';
+    }
+    if (!hasResponse) return 'default';
+    return isActive ? 'completed' : 'skipped';
+  }
+
+  const routerState        = isLoading ? 'loading' : (hasResponse ? 'completed' : 'default');
+  const facultyState       = nodeState(agentsUsed.includes('faculty_rag') || route?.faculty_rag);
+  const researchState      = nodeState(agentsUsed.includes('research') || route?.current_research);
+  const synthesisState     = nodeState(
+    agentsUsed.includes('synthesis') || (agentsUsed.length > 0 && !isLoading)
+  );
+  const verificationState  = nodeState(
+    agentsUsed.includes('verification') || (agentsUsed.length > 0 && !isLoading)
+  );
+  const emergencyState     = isEmergency
+    ? (isLoading ? 'loading' : 'completed')
+    : 'skipped';
+
+  /* ── connector state ── */
+  function connectorState(fromState) {
+    if (fromState === 'loading') return 'active';
+    if (fromState === 'completed') return 'completed';
+    return '';
+  }
 
   return (
-    <aside className="agent-activity-panel" aria-label="Agent Activity and Evidence Panel">
-      {/* Panel Header */}
-      <div className="panel-header">
-        <div className="panel-header-title">
-          <Activity size={18} style={{ color: 'var(--accent-cyan)' }} />
-          <span>Agent Workflow & Trace</span>
+    <>
+      <aside
+        className={`agent-activity-panel ${isOpen ? 'open' : ''}`}
+        aria-label="Agent Activity and Evidence Panel"
+      >
+        {/* ── Panel Header ── */}
+        <div className="panel-header">
+          <div className="panel-header-title">
+            <Activity size={16} style={{ color: 'var(--accent-cyan)' }} />
+            <span>Agent Inspector</span>
+          </div>
+          <button
+            className="panel-close-btn"
+            onClick={onClose}
+            title="Close Panel"
+            aria-label="Close Inspector"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <button
-          className="panel-close-btn"
-          onClick={onClose}
-          title="Close Panel"
-          aria-label="Close Inspector"
-        >
-          <X size={18} />
-        </button>
-      </div>
 
-      {/* Tabs */}
-      <div className="panel-tabs-bar">
-        <button
-          className={`panel-tab-btn ${activeTab === 'pipeline' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pipeline')}
-        >
-          <Cpu size={14} />
-          <span>Agent Pipeline</span>
-        </button>
-        <button
-          className={`panel-tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sources')}
-        >
-          <Layers size={14} />
-          <span>Evidence Sources</span>
-          <span className="panel-tab-count">{sources.length}</span>
-        </button>
-      </div>
+        {/* ── Tabs ── */}
+        <div className="panel-tabs-bar">
+          <button
+            className={`panel-tab-btn ${activeTab === 'pipeline' ? 'active' : ''}`}
+            onClick={() => setActiveTab('pipeline')}
+          >
+            <Cpu size={13} />
+            <span>Workflow</span>
+          </button>
+          <button
+            className={`panel-tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sources')}
+          >
+            <Layers size={13} />
+            <span>Evidence</span>
+            <span className="panel-tab-count">{sources.length}</span>
+          </button>
+        </div>
 
-      {/* Panel Content */}
-      <div className="panel-content-scroll">
-        {activeTab === 'pipeline' && (
-          <div className="workflow-graph-box">
-            <div className="workflow-section-title">
-              <span>Multi-Agent Orchestration Flow</span>
-              {selectedMessage?.mode && (
-                <span className={`prompt-badge ${selectedMessage.mode === 'mock' ? 'emergency' : 'faculty'}`}>
-                  {selectedMessage.mode.toUpperCase()}
-                </span>
-              )}
-            </div>
+        {/* ── Panel Body ── */}
+        <div className="panel-content-scroll">
 
-            {/* Pipeline Visual Graph */}
-            <div className="workflow-nodes-container">
-              {/* 1. ROUTER NODE */}
-              <div
-                className={`workflow-node-card ${
-                  isRouterActive ? 'active' : 'bypassed'
-                }`}
-              >
-                <div className="node-icon-box router">
-                  <Compass size={18} />
-                </div>
-                <div className="node-details">
-                  <div className="node-title-row">
-                    <span className="node-name">1. Intent Router</span>
-                    <span
-                      className={`node-status-pill ${
-                        isRouterActive ? 'completed' : 'bypassed'
-                      }`}
-                    >
-                      {isRouterActive ? 'Executed' : 'Standby'}
-                    </span>
-                  </div>
-                  <span className="node-desc">
-                    Classifies clinical intent, urgency level, and determines routing path.
+          {/* ══ PIPELINE TAB ══ */}
+          {activeTab === 'pipeline' && (
+            <div className="workflow-graph-box">
+              {/* Section header */}
+              <div className="workflow-section-title">
+                <span>Multi-Agent Orchestration</span>
+                {selectedMessage?.mode && (
+                  <span className={`prompt-badge ${selectedMessage.mode === 'mock' ? 'mock' : 'faculty'}`}>
+                    {selectedMessage.mode.toUpperCase()}
                   </span>
-                </div>
+                )}
               </div>
 
-              {/* Connector */}
-              <div className="workflow-connector-line">
-                <ChevronDown size={14} />
-              </div>
-
-              {/* 2. BRANCH NODES (Faculty RAG / Research / Emergency) */}
-              {isEmergencyActive ? (
-                /* Emergency Agent Node */
-                <div className="workflow-node-card active emergency">
-                  <div className="node-icon-box emergency">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div className="node-details">
-                    <div className="node-title-row">
-                      <span className="node-name">2. Emergency Agent</span>
-                      <span className="node-status-pill active" style={{ color: '#f87171' }}>
-                        Triggered
-                      </span>
-                    </div>
-                    <span className="node-desc">
-                      Immediate safety triage and urgent clinical escalation protocol.
-                    </span>
-                  </div>
+              {/* ── No activity yet ── */}
+              {!hasAnything && (
+                <div className="pipeline-empty-state">
+                  <Circle size={32} />
+                  <p>Submit a question to activate the pipeline</p>
                 </div>
-              ) : (
-                <>
-                  {/* Faculty RAG Node */}
-                  <div
-                    className={`workflow-node-card ${
-                      isFacultyActive ? 'active' : 'bypassed'
-                    }`}
-                  >
-                    <div className="node-icon-box faculty_rag">
-                      <BookOpen size={18} />
-                    </div>
-                    <div className="node-details">
-                      <div className="node-title-row">
-                        <span className="node-name">2a. Faculty RAG Agent</span>
-                        <span
-                          className={`node-status-pill ${
-                            isFacultyActive ? 'completed' : 'bypassed'
-                          }`}
-                        >
-                          {isFacultyActive ? 'Grounded' : 'Bypassed'}
-                        </span>
-                      </div>
-                      <span className="node-desc">
-                        Retrieves grounded evidence from institutional oncology PDFs & curriculum.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Connector between branches if both or research */}
-                  <div className="workflow-connector-line">
-                    <ChevronDown size={14} />
-                  </div>
-
-                  {/* Research Agent Node */}
-                  <div
-                    className={`workflow-node-card ${
-                      isResearchActive ? 'active' : 'bypassed'
-                    }`}
-                  >
-                    <div className="node-icon-box research">
-                      <Globe size={18} />
-                    </div>
-                    <div className="node-details">
-                      <div className="node-title-row">
-                        <span className="node-name">2b. Research Agent</span>
-                        <span
-                          className={`node-status-pill ${
-                            isResearchActive ? 'completed' : 'bypassed'
-                          }`}
-                        >
-                          {isResearchActive ? 'Queried' : 'Bypassed'}
-                        </span>
-                      </div>
-                      <span className="node-desc">
-                        Scrapes and extracts latest clinical trials and recent medical publications.
-                      </span>
-                    </div>
-                  </div>
-                </>
               )}
 
-              {/* Connector */}
-              <div className="workflow-connector-line">
-                <ChevronDown size={14} />
-              </div>
+              {/* ── Pipeline Nodes ── */}
+              {hasAnything && (
+                <div className="workflow-nodes-container">
 
-              {/* 3. SYNTHESIS NODE */}
-              <div
-                className={`workflow-node-card ${
-                  isSynthesisActive ? 'active' : 'bypassed'
-                }`}
-              >
-                <div className="node-icon-box synthesis">
-                  <Cpu size={18} />
-                </div>
-                <div className="node-details">
-                  <div className="node-title-row">
-                    <span className="node-name">3. Synthesis Agent</span>
-                    <span
-                      className={`node-status-pill ${
-                        isSynthesisActive ? 'completed' : 'bypassed'
-                      }`}
-                    >
-                      {isSynthesisActive ? 'Synthesized' : 'Standby'}
-                    </span>
-                  </div>
-                  <span className="node-desc">
-                    Combines grounded evidence into patient-friendly clinical answers.
-                  </span>
-                </div>
-              </div>
+                  {/* 1. ROUTER */}
+                  <AgentNode
+                    icon={<Compass size={16} />}
+                    type="router"
+                    name="Intent Router"
+                    desc="Classifies clinical intent, urgency level, and determines routing path"
+                    state={routerState}
+                    statusLabel={{
+                      loading: 'Analyzing',
+                      completed: 'Routed',
+                      queued: 'Queued',
+                      skipped: 'Skipped',
+                      default: 'Standby',
+                    }}
+                  />
 
-              {/* Connector */}
-              <div className="workflow-connector-line">
-                <ChevronDown size={14} />
-              </div>
+                  {/* Connector 1 → 2 */}
+                  <PipelineConnector
+                    state={connectorState(routerState)}
+                  />
 
-              {/* 4. VERIFICATION NODE */}
-              <div
-                className={`workflow-node-card ${
-                  isVerificationActive ? 'active' : 'bypassed'
-                }`}
-              >
-                <div className="node-icon-box verification">
-                  <ShieldCheck size={18} />
-                </div>
-                <div className="node-details">
-                  <div className="node-title-row">
-                    <span className="node-name">4. Verification Agent</span>
-                    <span
-                      className={`node-status-pill ${
-                        isVerificationActive ? 'completed' : 'bypassed'
-                      }`}
-                    >
-                      {isVerificationActive ? (selectedMessage?.mode === 'mock' ? 'Simulated' : verificationStatus) : 'Pending'}
-                    </span>
-                  </div>
-                  <span className="node-desc">
-                    Cross-checks facts against retrieved literature to prevent hallucinations.
-                  </span>
-                </div>
-              </div>
-            </div>
+                  {/* 2a/2b/2c — Branch nodes */}
+                  {isEmergency ? (
+                    /* Emergency branch */
+                    <AgentNode
+                      icon={<AlertTriangle size={16} />}
+                      type="emergency"
+                      name="Emergency Agent"
+                      desc="Immediate safety triage and urgent clinical escalation protocol"
+                      state={emergencyState}
+                      isEmergency
+                      statusLabel={{
+                        loading: 'Triaging',
+                        completed: 'Triggered',
+                        skipped: 'Not activated',
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <AgentNode
+                        icon={<BookOpen size={16} />}
+                        type="faculty_rag"
+                        name="Faculty RAG Agent"
+                        desc="Retrieves grounded evidence from institutional oncology PDFs & curriculum"
+                        state={facultyState}
+                        statusLabel={{
+                          loading: 'Retrieving',
+                          completed: 'Grounded',
+                          skipped: 'Bypassed',
+                          queued: 'Queued',
+                          default: 'Standby',
+                        }}
+                      />
 
-            {/* Verification Status Card */}
-            {selectedMessage && (
-              <div className="verification-metric-box">
-                <div className="workflow-section-title">
-                  <span>Verification Metrics</span>
-                  <FileCheck size={14} />
-                </div>
+                      <PipelineConnector
+                        state={connectorState(facultyState)}
+                      />
 
-                <div className="metric-row">
-                  <span className="metric-label">Clinical Verdict:</span>
-                  <VerificationBadge
-                    status={verificationStatus}
-                    attempts={attempts}
-                    showAttempts={false}
-                    mode={selectedMessage?.mode}
+                      <AgentNode
+                        icon={<Globe size={16} />}
+                        type="research"
+                        name="Research Agent"
+                        desc="Scrapes and extracts latest clinical trials and peer-reviewed publications"
+                        state={researchState}
+                        statusLabel={{
+                          loading: 'Querying',
+                          completed: 'Queried',
+                          skipped: 'Bypassed',
+                          queued: 'Queued',
+                          default: 'Standby',
+                        }}
+                      />
+                    </>
+                  )}
+
+                  {/* Connector → Synthesis */}
+                  <PipelineConnector
+                    state={connectorState(isEmergency ? emergencyState : researchState)}
+                  />
+
+                  {/* 3. SYNTHESIS */}
+                  <AgentNode
+                    icon={<Cpu size={16} />}
+                    type="synthesis"
+                    name="Synthesis Agent"
+                    desc="Combines grounded evidence into a structured clinical answer"
+                    state={synthesisState}
+                    statusLabel={{
+                      loading: 'Synthesizing',
+                      completed: 'Synthesized',
+                      skipped: 'Standby',
+                      queued: 'Queued',
+                      default: 'Standby',
+                    }}
+                  />
+
+                  {/* Connector → Verification */}
+                  <PipelineConnector
+                    state={connectorState(synthesisState)}
+                  />
+
+                  {/* 4. VERIFICATION */}
+                  <AgentNode
+                    icon={<ShieldCheck size={16} />}
+                    type="verification"
+                    name="Verification Agent"
+                    desc="Cross-checks facts against retrieved literature to prevent hallucinations"
+                    state={verificationState}
+                    statusLabel={{
+                      loading: 'Verifying',
+                      completed: selectedMessage?.mode === 'mock'
+                        ? 'Simulated'
+                        : (verificationStatus || 'Done'),
+                      skipped: 'Pending',
+                      queued: 'Queued',
+                      default: 'Pending',
+                    }}
                   />
                 </div>
+              )}
 
-                <div className="metric-row">
-                  <span className="metric-label">Verification Attempts:</span>
-                  <span className="metric-value">{attempts}</span>
+              {/* ── Verification Metrics ── */}
+              {selectedMessage && hasResponse && (
+                <div className="verification-metric-box">
+                  <div className="workflow-section-title">
+                    <span>Verification Metrics</span>
+                    <FileCheck size={13} />
+                  </div>
+
+                  <div className="metric-row">
+                    <span className="metric-label">Clinical Verdict</span>
+                    <VerificationBadge
+                      status={verificationStatus}
+                      attempts={attempts}
+                      showAttempts={false}
+                      mode={selectedMessage?.mode}
+                    />
+                  </div>
+
+                  <div className="metric-row">
+                    <span className="metric-label">Verification Attempts</span>
+                    <span className="metric-value">{attempts}</span>
+                  </div>
+
+                  <div className="metric-row" style={{ alignItems: 'flex-start' }}>
+                    <span className="metric-label">Agent Chain</span>
+                    <div className="metric-agents-chain">
+                      {agentsUsed.length > 0 ? (
+                        agentsUsed.map((a, i) => (
+                          <React.Fragment key={i}>
+                            <span className="agent-mini-chip">{a}</span>
+                            {i < agentsUsed.length - 1 && (
+                              <span className="agent-chain-arrow">›</span>
+                            )}
+                          </React.Fragment>
+                        ))
+                      ) : (
+                        <span className="metric-value" style={{ color: 'var(--text-muted)' }}>
+                          —
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="metric-row">
+                    <span className="metric-label">Sources Retrieved</span>
+                    <span className="metric-value">{sources.length} items</span>
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
 
-                <div className="metric-row">
-                  <span className="metric-label">Active Agents:</span>
-                  <span className="metric-value">
-                    {agentsUsed.length > 0 ? agentsUsed.join(' → ') : 'None recorded'}
-                  </span>
-                </div>
+          {/* ══ EVIDENCE TAB ══ */}
+          {activeTab === 'sources' && (
+            <SourcesPanel sources={sources} />
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
 
-                <div className="metric-row">
-                  <span className="metric-label">Sources Cited:</span>
-                  <span className="metric-value">{sources.length} items</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+/* ────────────────────────────────────────────
+   AgentNode — individual pipeline step card
+   ──────────────────────────────────────────── */
+function AgentNode({ icon, type, name, desc, state, statusLabel = {}, isEmergency = false }) {
+  const label = statusLabel[state] || state;
 
-        {activeTab === 'sources' && (
-          <SourcesPanel sources={sources} />
-        )}
+  const statusPillClass = {
+    loading:   'loading',
+    completed: 'completed',
+    skipped:   'skipped',
+    queued:    'queued',
+    default:   'queued',
+  }[state] || 'queued';
+
+  const isSpinning = state === 'loading';
+  const cardClass  = isEmergency && state === 'completed'
+    ? 'emergency'
+    : state;
+
+  return (
+    <div className={`agent-node ${cardClass}`}>
+      <div className={`node-icon-circle ${type} ${isSpinning ? 'spinning' : ''}`}>
+        {icon}
       </div>
-    </aside>
+
+      <div className="node-details">
+        <div className="node-title-row">
+          <span className="node-name">{name}</span>
+          <span className={`node-status-pill ${statusPillClass} ${isEmergency && state === 'completed' ? 'emergency' : ''}`}>
+            {state === 'loading' && (
+              <Loader2 size={8} style={{ display: 'inline', marginRight: 3, animation: 'spin 1s linear infinite' }} />
+            )}
+            {state === 'completed' && !isEmergency && (
+              <CheckCircle2 size={8} style={{ display: 'inline', marginRight: 3 }} />
+            )}
+            {state === 'skipped' && (
+              <MinusCircle size={8} style={{ display: 'inline', marginRight: 3 }} />
+            )}
+            {label}
+          </span>
+        </div>
+        <span className="node-desc">{desc}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   PipelineConnector — animated vertical line
+   ──────────────────────────────────────────── */
+function PipelineConnector({ state }) {
+  return (
+    <div className={`pipeline-connector ${state}`}>
+      <div className="pipeline-connector-line" />
+    </div>
   );
 }

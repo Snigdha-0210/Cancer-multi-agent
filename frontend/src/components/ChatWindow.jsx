@@ -3,25 +3,16 @@ import {
   BookOpen,
   Globe,
   ShieldCheck,
-  Activity,
   AlertCircle,
   RefreshCw,
+  Compass,
+  Cpu,
   ChevronRight,
-  Sparkles
 } from 'lucide-react';
 import MessageBubble, { LoadingMessageBubble } from './MessageBubble';
 
 /**
- * ChatWindow manages the scrollable message viewport, welcome hero, and error cards.
- *
- * @param {Object} props
- * @param {Array} props.messages - List of chat messages
- * @param {boolean} props.isLoading - Whether a query is currently running
- * @param {Object|null} props.error - Error object if any
- * @param {Function} props.onRetry - Callback to retry failed question
- * @param {Function} props.onSelectPrompt - Callback when hero prompt is clicked
- * @param {Function} props.onInspectMessage - Callback to inspect message details in sidebar
- * @param {Object|null} props.selectedMessage - Currently inspected message
+ * ChatWindow — scrollable message viewport, welcome hero, and error card.
  */
 export default function ChatWindow({
   messages = [],
@@ -34,7 +25,6 @@ export default function ChatWindow({
 }) {
   const scrollEndRef = useRef(null);
 
-  // Auto-scroll on new messages or loading state
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading, error]);
@@ -42,23 +32,66 @@ export default function ChatWindow({
   return (
     <div className="chat-window">
       <div className="chat-window-inner">
-        {/* Empty State Hero */}
+
+        {/* ── Welcome Hero ── */}
         {messages.length === 0 && (
           <div className="welcome-hero">
-            <div className="hero-shield-icon">
-              <ShieldCheck size={28} />
+            {/* Icon */}
+            <div className="hero-icon-area">
+              <div className="hero-shield-icon">
+                <ShieldCheck size={30} />
+              </div>
             </div>
 
             <h1 className="hero-title">Oncology Intelligence Assistant</h1>
             <p className="hero-description">
-              A specialized multi-agent system combining institutional oncology faculty knowledge, current peer-reviewed research, and strict fact-verification to provide grounded clinical answers.
+              A specialized multi-agent system combining institutional oncology faculty knowledge,
+              current peer-reviewed research, and strict fact-verification to provide grounded clinical answers.
             </p>
 
-            {/* Architecture Highlights */}
+            {/* Mini pipeline architecture diagram */}
+            <div className="hero-pipeline-diagram" aria-hidden="true">
+              <div className="pipeline-step">
+                <div className="pipeline-step-dot router">
+                  <Compass size={13} />
+                </div>
+                <span className="pipeline-step-label">Router</span>
+              </div>
+              <div className="pipeline-arrow"><ChevronRight size={12} /></div>
+              <div className="pipeline-step">
+                <div className="pipeline-step-dot faculty">
+                  <BookOpen size={13} />
+                </div>
+                <span className="pipeline-step-label">Faculty RAG</span>
+              </div>
+              <div className="pipeline-arrow"><ChevronRight size={12} /></div>
+              <div className="pipeline-step">
+                <div className="pipeline-step-dot research">
+                  <Globe size={13} />
+                </div>
+                <span className="pipeline-step-label">Research</span>
+              </div>
+              <div className="pipeline-arrow"><ChevronRight size={12} /></div>
+              <div className="pipeline-step">
+                <div className="pipeline-step-dot synthesis">
+                  <Cpu size={13} />
+                </div>
+                <span className="pipeline-step-label">Synthesis</span>
+              </div>
+              <div className="pipeline-arrow"><ChevronRight size={12} /></div>
+              <div className="pipeline-step">
+                <div className="pipeline-step-dot verify">
+                  <ShieldCheck size={13} />
+                </div>
+                <span className="pipeline-step-label">Verification</span>
+              </div>
+            </div>
+
+            {/* Feature cards */}
             <div className="hero-features">
               <div className="hero-feature-card">
                 <div className="feature-icon-box faculty">
-                  <BookOpen size={16} />
+                  <BookOpen size={15} />
                 </div>
                 <h4>Faculty Knowledge Base</h4>
                 <p>Curated oncology guidelines, clinical textbook PDFs, and institutional protocols.</p>
@@ -66,26 +99,24 @@ export default function ChatWindow({
 
               <div className="hero-feature-card">
                 <div className="feature-icon-box research">
-                  <Globe size={16} />
+                  <Globe size={15} />
                 </div>
                 <h4>Current Research</h4>
-                <p>Extracts up-to-date literature and clinical trials for newly emerging therapies.</p>
+                <p>Extracts up-to-date literature and clinical trials for emerging therapies.</p>
               </div>
 
               <div className="hero-feature-card">
                 <div className="feature-icon-box verified">
-                  <ShieldCheck size={16} />
+                  <ShieldCheck size={15} />
                 </div>
                 <h4>Evidence Verification</h4>
-                <p>Multi-step automated fact-checking ensures answers match verified evidence sources.</p>
+                <p>Multi-step automated fact-checking ensures answers match verified sources.</p>
               </div>
             </div>
 
-            {/* Starter Prompt Choices */}
+            {/* Starter prompts */}
             <div className="hero-prompts-container">
-              <div className="hero-prompts-label">
-                Select an example query to test the pipeline:
-              </div>
+              <div className="hero-prompts-label">Example queries to test the pipeline</div>
 
               <div className="hero-prompts-list">
                 <button
@@ -96,8 +127,13 @@ export default function ChatWindow({
                     )
                   }
                 >
-                  <span>What are the established risk factors and early warning signs for melanoma?</span>
-                  <span className="prompt-badge faculty">Faculty RAG</span>
+                  <span className="hero-prompt-btn-text">
+                    What are the established risk factors and early warning signs for melanoma?
+                  </span>
+                  <div className="hero-prompt-btn-right">
+                    <span className="prompt-badge faculty">Faculty RAG</span>
+                    <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+                  </div>
                 </button>
 
                 <button
@@ -108,8 +144,13 @@ export default function ChatWindow({
                     )
                   }
                 >
-                  <span>What are the latest 2026 immunotherapy clinical trial findings?</span>
-                  <span className="prompt-badge research">Live Research</span>
+                  <span className="hero-prompt-btn-text">
+                    What are the latest 2026 immunotherapy clinical trial findings?
+                  </span>
+                  <div className="hero-prompt-btn-right">
+                    <span className="prompt-badge research">Live Research</span>
+                    <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+                  </div>
                 </button>
 
                 <button
@@ -120,15 +161,20 @@ export default function ChatWindow({
                     )
                   }
                 >
-                  <span>Emergency: Experiencing sudden severe distress during chemotherapy</span>
-                  <span className="prompt-badge emergency">Emergency Triage</span>
+                  <span className="hero-prompt-btn-text">
+                    Emergency: Experiencing sudden severe distress during chemotherapy
+                  </span>
+                  <div className="hero-prompt-btn-right">
+                    <span className="prompt-badge emergency">Emergency Triage</span>
+                    <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} />
+                  </div>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Message Stream */}
+        {/* ── Message Stream ── */}
         {messages.map((msg, index) => (
           <MessageBubble
             key={msg.id || index}
@@ -138,19 +184,19 @@ export default function ChatWindow({
           />
         ))}
 
-        {/* Active Pipeline Loading Indicator */}
+        {/* ── Pipeline Loading Indicator ── */}
         {isLoading && <LoadingMessageBubble />}
 
-        {/* Error State Banner */}
+        {/* ── Error Banner ── */}
         {error && (
           <div className="error-card">
-            <AlertCircle size={20} />
+            <AlertCircle size={18} />
             <div className="error-card-content">
-              <span className="error-card-title">Multi-Agent Workflow Error</span>
+              <span className="error-card-title">Multi-Agent Pipeline Error</span>
               <p>{error.message || 'An unexpected error occurred while communicating with the backend.'}</p>
               {onRetry && (
                 <button className="error-retry-btn" onClick={onRetry}>
-                  <RefreshCw size={12} />
+                  <RefreshCw size={11} />
                   <span>Retry Question</span>
                 </button>
               )}

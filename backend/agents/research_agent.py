@@ -1,10 +1,13 @@
-from openai import OpenAI
+import json
+import urllib.request
+
 from pydantic import BaseModel, Field
 
-from backend.config import OPENAI_API_KEY
+from backend.tools.web_search import search_web
 
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
 SYSTEM_PROMPT = """
@@ -16,7 +19,8 @@ answered from the faculty PDF knowledge base.
 
 IMPORTANT RULES:
 
-1. Research the user's question using external web sources.
+1. Use the provided external web search results as your research
+   evidence.
 
 2. Prefer authoritative and trustworthy sources.
 
@@ -53,11 +57,29 @@ IMPORTANT RULES:
 
 12. If the question contains a claim such as "latest",
     "newest", or "most recent", do not assume that finding one
-    recent source proves the claim. Look for evidence that allows
-    the recency claim to be established.
+    recent source proves the claim.
 
-13. Return structured research evidence. Another agent will later
+13. Only make claims that are supported by the supplied search
+    results.
+
+14. Return structured research evidence. Another agent will later
     synthesize and verify your research.
+
+15. For questions asking for "latest", "newest", "most recent",
+    or a specific current year, set currentness to CURRENT only
+    when the supplied evidence clearly establishes that the
+    information is current as of the requested time.
+
+    If the evidence confirms a recent approval or development but
+    does NOT establish that no newer relevant development exists,
+    set currentness to POSSIBLY_CURRENT.
+
+    Never use CURRENT merely because a source is recent.
+
+16. When currentness is POSSIBLY_CURRENT, the summary and claims
+    must use cautious wording such as "the latest approval found
+    in the searched sources" rather than claiming it is definitively
+    the latest approval.
 """
 
 
@@ -78,55 +100,248 @@ class ResearchResult(BaseModel):
     currentness: str = ""
 
 
+def ask_ollama(prompt: str) -> str:
+    payload = {
+        "model": MODEL_NAME,
+        "system": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request, timeout=180) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]
+
+
 def research_question(question: str) -> ResearchResult:
     """
-    Research a question using external web search and return
-    structured evidence.
+    Research a question using free external web search and Qwen3.
     """
 
     try:
-        response = client.responses.parse(
-            model="gpt-5.6-luna",
-            instructions=SYSTEM_PROMPT,
-            tools=[
-                {
-                    "type": "web_search",
-                }
-            ],
-            input=question,
-            text_format=ResearchResult,
-        )
+        # ---------------------------------------------------------
+        # 1. Search authoritative sources first
+        # ---------------------------------------------------------
 
-        return response.output_parsed
+        authoritative_queries = [
+            f"{question} site:fda.gov",
+            f"{question} site:cancer.gov",
+            f"{question} site:nih.gov",
+        ]
 
-    except Exception as e:
-        error_text = str(e)
+        search_results = []
 
-        if (
-            "insufficient_quota" in error_text
-            or "credit_balance_exhausted" in error_text
-        ):
-            print()
-            print("=" * 70)
-            print("RESEARCH AGENT — LIVE RESEARCH UNAVAILABLE")
-            print("=" * 70)
-            print("Reason: OpenAI API credit balance exhausted.")
+        for query in authoritative_queries:
+            try:
+                results = search_web(query, max_results=5)
+                search_results.extend(results)
+            except Exception as search_error:
+                print(f"Search warning: {search_error}")
 
+        # Remove duplicate URLs
+        unique_results = []
+        seen_urls = set()
+
+        for result in search_results:
+            url = result.get("url", "").strip()
+
+            if not url or url in seen_urls:
+                continue
+
+            seen_urls.add(url)
+            unique_results.append(result)
+
+        # ---------------------------------------------------------
+        # 2. If authoritative searches returned too little,
+        #    perform a broader search.
+        # ---------------------------------------------------------
+
+        if len(unique_results) < 3:
+            try:
+                broader_results = search_web(
+                    question,
+                    max_results=8,
+                )
+
+                for result in broader_results:
+                    url = result.get("url", "").strip()
+
+                    if not url or url in seen_urls:
+                        continue
+
+                    seen_urls.add(url)
+                    unique_results.append(result)
+
+            except Exception as search_error:
+                print(f"Broader search warning: {search_error}")
+
+        # ---------------------------------------------------------
+        # 3. Fail safely if web search produced nothing
+        # ---------------------------------------------------------
+
+        if not unique_results:
             return ResearchResult(
                 summary=(
-                    "Live external research could not be completed "
-                    "because the research API is currently unavailable."
+                    "External web research could not be completed "
+                    "because no search results were available."
                 ),
                 claims=[],
                 sources=[],
                 uncertainties=[
-                    "The Research Agent could not perform live web research.",
+                    "No external web search results were available.",
                     "Current information could not be independently verified.",
                 ],
                 currentness="UNKNOWN",
             )
 
-        raise
+        # Limit evidence sent to the local model
+        unique_results = unique_results[:15]
+
+        # ---------------------------------------------------------
+        # 4. Prepare evidence for Qwen3
+        # ---------------------------------------------------------
+
+        evidence_text = []
+
+        for index, result in enumerate(unique_results, 1):
+            evidence_text.append(
+                f"""
+SOURCE {index}
+
+Title:
+{result.get("title", "")}
+
+URL:
+{result.get("url", "")}
+
+Search snippet:
+{result.get("snippet", "")}
+"""
+            )
+
+        evidence_block = "\n".join(evidence_text)
+
+        prompt = f"""
+Research question:
+
+{question}
+
+External web search results:
+
+{evidence_block}
+
+Using ONLY the supplied search results, produce a structured
+research result.
+
+Important:
+
+- Do not invent information.
+- Do not invent publication dates.
+- Do not invent update dates.
+- Do not invent URLs.
+- Do not claim that something is "latest" unless the supplied
+  evidence supports that conclusion.
+- Prefer FDA/NCI/NIH/government sources when available.
+- If sources disagree, explicitly mention the conflict.
+- If the evidence is insufficient, say so.
+
+Return JSON with exactly these fields:
+
+{{
+  "summary": "short evidence-based summary",
+  "claims": [
+    "supported claim 1",
+    "supported claim 2"
+  ],
+  "sources": [
+    {{
+      "title": "source title",
+      "organization": "organization name",
+      "url": "source URL",
+      "publication_date": "",
+      "updated_date": "",
+      "source_type": "government/medical organization/etc."
+    }}
+  ],
+  "uncertainties": [
+    "uncertainty 1"
+  ],
+  "currentness": "CURRENT / POSSIBLY_CURRENT / OUTDATED / UNKNOWN"
+}}
+"""
+
+        # ---------------------------------------------------------
+        # 5. Ask local Qwen3 to structure the evidence
+        # ---------------------------------------------------------
+
+        raw_response = ask_ollama(prompt)
+
+        parsed = json.loads(raw_response)
+
+        result = ResearchResult.model_validate(parsed)
+
+        # ---------------------------------------------------------
+        # Deterministic currentness safeguard
+        # ---------------------------------------------------------
+        # For "latest/current" questions, do not blindly trust the
+        # LLM's CURRENT classification.
+        latest_keywords = [
+            "latest",
+            "current",
+            "newest",
+            "most recent",
+            "up-to-date",
+        ]
+
+        question_lower = question.lower()
+
+        is_currentness_question = any(
+            keyword in question_lower
+            for keyword in latest_keywords
+        )
+
+        if (
+            is_currentness_question
+            and result.currentness.upper() == "CURRENT"
+        ):
+            result.currentness = "POSSIBLY_CURRENT"
+
+            result.uncertainties.append(
+                "The search found recent relevant sources, but the "
+                "available evidence does not independently establish "
+                "that no newer relevant development exists."
+            )
+
+        return result
+
+    except Exception as error:
+        print()
+        print("=" * 70)
+        print("RESEARCH AGENT - LOCAL RESEARCH UNAVAILABLE")
+        print("=" * 70)
+        print(f"Reason: {error}")
+
+        return ResearchResult(
+            summary=(
+                "External research could not be completed reliably."
+            ),
+            claims=[],
+            sources=[],
+            uncertainties=[
+                "The Research Agent encountered an error.",
+                "Current information could not be independently verified.",
+            ],
+            currentness="UNKNOWN",
+        )
 
 
 def main():

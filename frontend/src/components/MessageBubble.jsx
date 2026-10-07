@@ -4,23 +4,17 @@ import {
   Activity,
   AlertTriangle,
   PhoneCall,
-  Layers,
-  ChevronRight,
-  ShieldCheck,
   Cpu,
+  ChevronRight,
   Loader2,
-  Sparkles,
-  Info
 } from 'lucide-react';
 import VerificationBadge from './VerificationBadge';
 
 /**
- * MessageBubble renders an individual message in the chat stream.
+ * MessageBubble renders an individual chat message.
  *
- * @param {Object} props
- * @param {Object} props.message - The message data
- * @param {Function} props.onInspect - Callback to open agent activity inspector for this message
- * @param {boolean} props.isSelected - Whether this message is currently being inspected
+ * User messages: right-aligned, simple bubble.
+ * Assistant messages: structured clinical card with header, answer, and footer.
  */
 export default function MessageBubble({ message, onInspect, isSelected }) {
   const isUser = message.role === 'user';
@@ -30,48 +24,59 @@ export default function MessageBubble({ message, onInspect, isSelected }) {
     message.agents_used?.includes('emergency') ||
     (message.answer && message.answer.toLowerCase().includes('sounds like an emergency'));
 
-  // Format timestamp
   const timeString = message.timestamp
-    ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    ? new Date(message.timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : '';
 
+  /* ── User message ── */
   if (isUser) {
     return (
       <div className="message-row user">
         <div className="message-avatar user" title="You">
-          <User size={18} />
+          <User size={16} />
         </div>
         <div className="message-content-wrapper">
           <div className="message-card user">
-            <div className="message-body-text">{message.question || message.content}</div>
+            {message.question || message.content}
           </div>
-          {timeString && <span className="message-timestamp">{timeString}</span>}
+          {timeString && (
+            <span className="message-timestamp">{timeString}</span>
+          )}
         </div>
       </div>
     );
   }
 
-  // Assistant Message
+  /* ── Assistant message ── */
+  const agentsUsed = message.agents_used || [];
+  const sources    = message.sources || [];
+
   return (
     <div className="message-row assistant">
+      {/* Avatar */}
       <div
         className={`message-avatar assistant ${isEmergency ? 'emergency' : ''}`}
         title={isEmergency ? 'Emergency Clinical Agent' : 'OncoAgent Clinical Assistant'}
       >
-        {isEmergency ? <AlertTriangle size={18} /> : <Activity size={18} />}
+        {isEmergency ? <AlertTriangle size={16} /> : <Activity size={16} />}
       </div>
 
-      <div className="message-content-wrapper" style={{ width: '100%' }}>
+      {/* Card */}
+      <div className="message-content-wrapper">
         <div className={`message-card assistant ${isEmergency ? 'emergency' : ''}`}>
-          {/* Emergency Safety Protocol Header Banner */}
+
+          {/* Emergency header banner */}
           {isEmergency && (
             <div className="emergency-alert-header">
-              <AlertTriangle size={18} />
-              <span>SAFETY PROTOCOL TRIGGERED: IMMEDIATE ATTENTION RECOMMENDED</span>
+              <AlertTriangle size={16} />
+              <span>SAFETY PROTOCOL ACTIVATED — IMMEDIATE ATTENTION RECOMMENDED</span>
             </div>
           )}
 
-          {/* Card Meta Header */}
+          {/* Card header: verification + mode + time */}
           <div className="card-header-bar">
             <div className="card-header-left">
               <VerificationBadge
@@ -80,33 +85,35 @@ export default function MessageBubble({ message, onInspect, isSelected }) {
                 mode={message.mode}
               />
               {message.mode === 'mock' && (
-                <span className="mode-pill mock" title="Running in development mock workflow">
-                  <span className="mode-dot" />
-                  Mock Dev Mode
+                <span className="mode-pill-inline mock">
+                  Dev Simulation
                 </span>
               )}
             </div>
-
             <div className="card-header-right">
-              {timeString && <span className="message-timestamp">{timeString}</span>}
+              {timeString && (
+                <span className="message-timestamp">{timeString}</span>
+              )}
             </div>
           </div>
 
-          {/* Response Text */}
-          <div className="message-body-text">
-            {message.answer || message.content}
+          {/* Answer body */}
+          <div className="card-answer-body">
+            <div className="message-body-text">
+              {message.answer || message.content}
+            </div>
           </div>
 
-          {/* Emergency Helpline Box */}
+          {/* Emergency helpline */}
           {isEmergency && (
             <div className="emergency-helpline-box">
               <div className="helpline-title">
-                <PhoneCall size={14} />
-                <span>Emergency & Support Resources</span>
+                <PhoneCall size={13} />
+                <span>Emergency &amp; Support Resources</span>
               </div>
               <div className="helpline-contacts">
                 <div className="helpline-chip">
-                  <span>Emergency Assistance:</span>
+                  <span>Emergency:</span>
                   <strong>112</strong>
                 </div>
                 <div className="helpline-chip">
@@ -121,33 +128,36 @@ export default function MessageBubble({ message, onInspect, isSelected }) {
             </div>
           )}
 
-          {/* Card Footer Bar: Multi-Agent Chain Preview & Inspect Action */}
+          {/* Card footer: agents chain + inspect button */}
           <div className="card-footer-bar">
+            {/* Agent chain preview */}
             <div className="agents-chain-preview">
-              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Agents:
-              </span>
-              {message.agents_used && message.agents_used.length > 0 ? (
-                message.agents_used.map((agent, i) => (
-                  <span key={i} className="agent-mini-chip">
-                    {agent}
-                  </span>
+              <span className="agents-chain-label">Agents:</span>
+              {agentsUsed.length > 0 ? (
+                agentsUsed.map((agent, i) => (
+                  <React.Fragment key={i}>
+                    <span className="agent-mini-chip">{agent}</span>
+                    {i < agentsUsed.length - 1 && (
+                      <span className="agent-chain-arrow">›</span>
+                    )}
+                  </React.Fragment>
                 ))
               ) : (
                 <span className="agent-mini-chip">pipeline</span>
               )}
             </div>
 
+            {/* Inspect button */}
             <button
               className={`inspect-trace-btn ${isSelected ? 'active' : ''}`}
               onClick={() => onInspect(message)}
               title="Inspect agent workflow trace and citation evidence"
             >
-              <Cpu size={13} />
+              <Cpu size={12} />
               <span>
-                {message.sources?.length ? `${message.sources.length} Sources & ` : ''}Workflow Trace
+                {sources.length ? `${sources.length} Sources · ` : ''}Workflow
               </span>
-              <ChevronRight size={12} />
+              <ChevronRight size={11} />
             </button>
           </div>
         </div>
@@ -157,40 +167,43 @@ export default function MessageBubble({ message, onInspect, isSelected }) {
 }
 
 /**
- * LoadingMessageBubble shows the active pipeline processing state.
+ * LoadingMessageBubble — shown while the multi-agent pipeline runs.
+ * Steps appear sequentially via CSS animation-delay.
  */
 export function LoadingMessageBubble() {
   return (
     <div className="message-row assistant">
       <div className="message-avatar assistant" title="Processing multi-agent pipeline">
-        <Loader2 size={18} className="spinner-icon" />
+        <Loader2 size={16} className="spinner-icon" />
       </div>
 
       <div className="message-content-wrapper">
         <div className="loading-card">
           <div className="loading-pipeline-header">
-            <Loader2 size={16} className="spinner-icon" />
-            <span>Multi-Agent Workflow Active...</span>
+            <Loader2 size={15} className="spinner-icon" />
+            <span>Multi-Agent Pipeline Active</span>
           </div>
 
           <div className="loading-steps-list">
-            <div className="loading-step-item active">
-              <div className="step-indicator-circle active">
-                <Loader2 size={10} className="spinner-icon" />
+            <div className="loading-step-item">
+              <div className="step-indicator-circle">
+                <Loader2 size={9} className="spinner-icon" />
               </div>
-              <span>1. Intent Router evaluating clinical context & urgency...</span>
+              <span>Intent Router — classifying clinical context &amp; urgency</span>
             </div>
-            <div className="loading-step-item active">
-              <div className="step-indicator-circle active">
-                <Loader2 size={10} className="spinner-icon" />
+
+            <div className="loading-step-item">
+              <div className="step-indicator-circle">
+                <Loader2 size={9} className="spinner-icon" />
               </div>
-              <span>2. Querying grounded faculty literature & research databases...</span>
+              <span>Faculty RAG — querying institutional oncology knowledge base</span>
             </div>
-            <div className="loading-step-item active">
-              <div className="step-indicator-circle active">
-                <Loader2 size={10} className="spinner-icon" />
+
+            <div className="loading-step-item">
+              <div className="step-indicator-circle">
+                <Loader2 size={9} className="spinner-icon" />
               </div>
-              <span>3. Cross-verifying clinical evidence & synthesizing response...</span>
+              <span>Synthesis &amp; Verification — grounding and cross-checking response</span>
             </div>
           </div>
         </div>

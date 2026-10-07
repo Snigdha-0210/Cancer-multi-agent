@@ -1,15 +1,26 @@
-from openai import OpenAI
+import json
+import urllib.request
 
-from backend.config import OPENAI_API_KEY
 
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
 def ask_ai(question: str) -> str:
-    response = client.responses.create(
-        model="gpt-5.6-luna",
-        input=question,
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": question,
+        "stream": False,
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
 
-    return response.output_text
+    with urllib.request.urlopen(request) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]

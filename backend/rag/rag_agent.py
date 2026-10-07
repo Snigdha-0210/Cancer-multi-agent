@@ -1,25 +1,15 @@
-import os
+import json
+import urllib.request
 
-from openai import OpenAI
-
-from backend.config import OPENAI_API_KEY
 from backend.rag.retriever import SemanticRetriever
 
 
 # ============================================================
-# SETTINGS & MODEL CONFIGURATION
+# SETTINGS
 # ============================================================
 
-MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-
-
-# ============================================================
-# OPENAI CLIENT
-# ============================================================
-
-client = OpenAI(
-    api_key=OPENAI_API_KEY
-)
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen3:8b"
 
 
 # ============================================================
@@ -89,7 +79,34 @@ Remember:
 
 You are a retrieval-grounded knowledge agent, not a diagnostic
 or treatment-prescribing system.
+
+Return a normal patient-friendly answer, not JSON.
 """
+
+
+# ============================================================
+# OLLAMA CALL
+# ============================================================
+
+def ask_ollama(prompt: str) -> str:
+    payload = {
+        "model": MODEL_NAME,
+        "system": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "stream": False,
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    return result["response"]
 
 
 # ============================================================
@@ -255,47 +272,49 @@ question according to your system instructions.
 
 Do not add medical facts from outside the retrieved evidence.
 """
+
     # --------------------------------------------------------
-    # Call LLM
+    # Print retrieved context for debugging
     # --------------------------------------------------------
 
     print()
     print("=" * 70)
     print("GENERATED CONTEXT")
     print("=" * 70)
+
     try:
         print(user_prompt)
     except UnicodeEncodeError:
-        print(user_prompt.encode("ascii", errors="replace").decode("ascii"))
-
-    try:
-        response = client.responses.create(
-            model=MODEL_NAME,
-            instructions=SYSTEM_PROMPT,
-            input=user_prompt,
+        print(
+            user_prompt.encode(
+                "ascii",
+                errors="replace",
+            ).decode("ascii")
         )
 
-        answer = response.output_text
+    # --------------------------------------------------------
+    # Call local Qwen model
+    # --------------------------------------------------------
+
+    try:
+
+        answer = ask_ollama(user_prompt)
 
     except Exception as e:
-        error_text = str(e)
 
-        if "insufficient_quota" in error_text or "credit_balance_exhausted" in error_text:
-            answer = (
-                "[LLM GENERATION UNAVAILABLE]\n\n"
-                "The faculty evidence was successfully retrieved, "
-                "but the answer-generation API is currently unavailable "
-                "because the API credit balance is exhausted."
-            )
+        print()
+        print("=" * 70)
+        print("RAG RETRIEVAL SUCCESSFUL — LLM GENERATION FAILED")
+        print("=" * 70)
+        print(f"Reason: {e}")
 
-            print()
-            print("=" * 70)
-            print("RAG RETRIEVAL SUCCESSFUL — LLM GENERATION UNAVAILABLE")
-            print("=" * 70)
-            print("Reason: OpenAI API credit balance exhausted.")
+        answer = (
+            "[LLM GENERATION UNAVAILABLE]\n\n"
+            "The relevant faculty evidence was successfully "
+            "retrieved, but the local language model could not "
+            "generate the answer."
+        )
 
-        else:
-            raise
     # --------------------------------------------------------
     # Build source list
     # --------------------------------------------------------

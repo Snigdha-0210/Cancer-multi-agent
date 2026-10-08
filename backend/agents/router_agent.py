@@ -11,7 +11,7 @@ from backend.safety.emergency_rules import detect_emergency_keywords
 # ============================================================
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen3:8b"
+MODEL_NAME = "llama3.2:3b"
 
 
 # ============================================================

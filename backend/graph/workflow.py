@@ -16,7 +16,8 @@ MAX_VERIFICATION_ATTEMPTS = 2
 def route_after_router(state: AgentState) -> str:
     route = state.get("route", {})
 
-    if route.get("emergency"):
+    # Emergency questions must take the safety path first.
+    if route.get("emergency", False):
         return "emergency"
 
     faculty_rag = route.get("faculty_rag", False)
@@ -31,6 +32,7 @@ def route_after_router(state: AgentState) -> str:
     if current_research:
         return "research"
 
+    # Even questions outside our PDFs should reach synthesis.
     return "synthesis"
 
 
@@ -69,12 +71,16 @@ def route_after_verification(state: AgentState) -> str:
         0,
     )
 
+    route = state.get("route", {})
+    needs_research = route.get("current_research", False)
+
     if verification_status == "PASS":
         return "final"
 
     if (
         verification_status == "FAIL"
         and attempts < MAX_VERIFICATION_ATTEMPTS
+        and needs_research
     ):
         return "retry_research"
 
@@ -184,7 +190,7 @@ def build_workflow():
 
     graph.add_edge(
         "emergency",
-        "synthesis",
+        "final",
     )
 
     # ---------------------------------------------------------

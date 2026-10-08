@@ -1,11 +1,6 @@
-from openai import OpenAI
 from pydantic import BaseModel
 
-from backend.config import OPENAI_API_KEY
 from backend.safety.emergency_rules import detect_emergency_keywords
-
-
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 SYSTEM_PROMPT = """
@@ -99,121 +94,80 @@ def generate_emergency_response(
     detection: dict,
 ) -> EmergencyResponse:
 
-    emergency_type = "general"
+    # ------------------------------------------------------------
+    # SAFETY-CRITICAL DESIGN
+    #
+    # Emergency responses must not depend on an external LLM.
+    # The deterministic safety rules identify the emergency type,
+    # and we return a predefined safe response.
+    #
+    # This guarantees that the emergency path still works when:
+    # - OpenAI is unavailable
+    # - Ollama is unavailable
+    # - the internet is unavailable
+    # - an LLM request times out
+    # ------------------------------------------------------------
 
     if detection["self_harm"]:
-        emergency_type = "self_harm"
-    elif detection["medical_emergency"]:
-        emergency_type = "medical_emergency"
 
-    user_prompt = f"""
-USER MESSAGE:
-
-{question}
-
-
-DETERMINISTIC SAFETY DETECTION:
-
-Emergency detected: {detection["emergency"]}
-Self-harm indicators: {detection["self_harm"]}
-Medical-emergency indicators: {detection["medical_emergency"]}
-Matched patterns: {detection["matched_patterns"]}
-
-Emergency type:
-
-{emergency_type}
-
-
-Generate a safe emergency response according to your system
-instructions.
-
-Do not provide ordinary cancer-information content.
-Prioritize immediate safety.
-"""
-
-    try:
-        response = client.responses.parse(
-            model="gpt-5.6-luna",
-            instructions=SYSTEM_PROMPT,
-            input=user_prompt,
-            text_format=EmergencyResponse,
+        return EmergencyResponse(
+            emergency=True,
+            emergency_type="self_harm",
+            response=(
+                "I'm really sorry you're going through this. "
+                "Please do not stay alone right now. Move away "
+                "from anything you could use to hurt yourself "
+                "and contact a trusted person who can stay with "
+                "you. If you may act on these thoughts or have "
+                "already harmed yourself, contact local emergency "
+                "services or go to the nearest emergency department "
+                "immediately."
+            ),
+            immediate_danger_question=(
+                "Are you in immediate danger right now, "
+                "or have you already harmed yourself?"
+            ),
+            recommended_action=(
+                "Seek immediate human support and emergency/crisis "
+                "assistance if there is immediate danger."
+            ),
         )
 
-        return response.output_parsed
+    if detection["medical_emergency"]:
 
-    except Exception as e:
-        error_text = str(e)
+        return EmergencyResponse(
+            emergency=True,
+            emergency_type="medical_emergency",
+            response=(
+                "The symptoms you described may require immediate "
+                "medical attention. Please contact local emergency "
+                "services or go to the nearest emergency department "
+                "now. If possible, have someone stay with you."
+            ),
+            immediate_danger_question=(
+                "Are you currently in immediate medical danger?"
+            ),
+            recommended_action=(
+                "Seek immediate emergency medical care."
+            ),
+        )
 
-        if (
-            "insufficient_quota" in error_text
-            or "credit_balance_exhausted" in error_text
-        ):
-            # --------------------------------------------------------
-            # Deterministic safety fallback
-            # --------------------------------------------------------
-            # The emergency path must remain functional even when
-            # the LLM is unavailable.
-            
-            if detection["self_harm"]:
-                return EmergencyResponse(
-                    emergency=True,
-                    emergency_type="self_harm",
-                    response=(
-                        "I'm really sorry you're going through this. "
-                        "Please do not stay alone right now. Move away "
-                        "from anything you could use to hurt yourself "
-                        "and contact a trusted person who can stay with "
-                        "you. If you may act on these thoughts or have "
-                        "already harmed yourself, contact local emergency "
-                        "services or go to the nearest emergency department "
-                        "immediately."
-                    ),
-                    immediate_danger_question=(
-                        "Are you in immediate danger right now, "
-                        "or have you already harmed yourself?"
-                    ),
-                    recommended_action=(
-                        "Seek immediate human support and emergency/crisis "
-                        "assistance if there is immediate danger."
-                    ),
-                )
-
-            if detection["medical_emergency"]:
-                return EmergencyResponse(
-                    emergency=True,
-                    emergency_type="medical_emergency",
-                    response=(
-                        "The symptoms you described may require immediate "
-                        "medical attention. Please contact local emergency "
-                        "services or go to the nearest emergency department "
-                        "now. If possible, have someone stay with you."
-                    ),
-                    immediate_danger_question=(
-                        "Are you currently in immediate medical danger?"
-                    ),
-                    recommended_action=(
-                        "Seek immediate emergency medical care."
-                    ),
-                )
-
-            return EmergencyResponse(
-                emergency=True,
-                emergency_type="general",
-                response=(
-                    "I'm sorry you're going through this. Please seek "
-                    "immediate support from a trusted person and contact "
-                    "local emergency services if you are in immediate danger."
-                ),
-                immediate_danger_question=(
-                    "Are you currently in immediate danger?"
-                ),
-                recommended_action=(
-                    "Seek immediate human support and emergency assistance "
-                    "if necessary."
-                ),
-            )
-
-        raise
+    return EmergencyResponse(
+        emergency=True,
+        emergency_type="general",
+        response=(
+            "I'm sorry you're going through this. Please seek "
+            "immediate support from a trusted person and contact "
+            "local emergency services if you are in immediate danger."
+        ),
+        immediate_danger_question=(
+            "Are you currently in immediate danger?"
+        ),
+        recommended_action=(
+            "Seek immediate human support and emergency assistance "
+            "if necessary."
+        ),
+    )
 
 
 def handle_emergency(question: str) -> EmergencyResponse:

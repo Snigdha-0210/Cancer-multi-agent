@@ -63,6 +63,14 @@ def final_node(state: AgentState) -> AgentState:
     final response.
     """
 
+    # Emergency responses must bypass ordinary answer verification.
+    emergency_response = state.get("emergency_response", "")
+
+    if emergency_response:
+        state["final_answer"] = emergency_response
+        state["verification_status"] = "NOT_APPLICABLE"
+        return state
+
     verification_status = state.get(
         "verification_status",
         "UNKNOWN",

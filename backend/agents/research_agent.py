@@ -7,7 +7,7 @@ from backend.tools.web_search import search_web
 
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen3:8b"
+MODEL_NAME = "llama3.2:3b"
 
 
 SYSTEM_PROMPT = """

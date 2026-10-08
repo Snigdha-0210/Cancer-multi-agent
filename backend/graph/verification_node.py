@@ -1,3 +1,5 @@
+import json
+
 from backend.agents.verifier_agent import verify_answer
 from backend.graph.state import AgentState
 
@@ -83,36 +85,83 @@ def verification_node(state: AgentState) -> AgentState:
 
     state["verification"] = verification_result
 
-    # Extract the overall verdict from the structured text
-    # returned by the current Verification Agent.
+    # ------------------------------------------------------------
+    # Extract verification verdict robustly.
+    #
+    # Qwen is instructed to return JSON, but local LLMs may
+    # occasionally return a human-readable verification instead.
+    # The Python layer therefore normalizes the result.
+    # ------------------------------------------------------------
+
     verification_upper = verification_result.upper()
 
+    # 1. Preferred format: JSON
+    try:
+        verification_data = json.loads(verification_result)
+
+        verdict = str(
+            verification_data.get("verdict", "")
+        ).upper()
+
+        if verdict == "PASS":
+            state["verification_status"] = "PASS"
+            return state
+
+        if verdict == "FAIL":
+            state["verification_status"] = "FAIL"
+            return state
+
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        pass
+
+
+    # 2. Explicit VERDICT format
     if "VERDICT: PASS" in verification_upper:
         state["verification_status"] = "PASS"
+        return state
 
-    elif "VERDICT: FAIL" in verification_upper:
+    if "VERDICT: FAIL" in verification_upper:
         state["verification_status"] = "FAIL"
+        return state
 
-    elif "FINAL VERDICT" in verification_upper:
+
+    # 3. Human-readable Status format
+    if "STATUS" in verification_upper:
+
+        if (
+            "SUPPORTED" in verification_upper
+            and "UNSUPPORTED" not in verification_upper
+        ):
+            state["verification_status"] = "PASS"
+            return state
+
         if (
             "UNSUPPORTED" in verification_upper
             or "PROBLEMATIC" in verification_upper
+            or "NOT SUPPORTED" in verification_upper
         ):
             state["verification_status"] = "FAIL"
-        else:
-            state["verification_status"] = "PASS"
+            return state
 
-    elif "CONCLUSION:" in verification_upper:
-        if (
-            "UNSUPPORTED" in verification_upper
-            or "PROBLEMATIC" in verification_upper
-        ):
-            state["verification_status"] = "FAIL"
-        else:
-            state["verification_status"] = "PASS"
 
-    else:
-        state["verification_status"] = "UNKNOWN"
+    # 4. Long-form verifier response
+    if "PARTIALLY SUPPORTED" in verification_upper:
+        state["verification_status"] = "FAIL"
+        return state
+
+    if "SUPPORTED" in verification_upper and "UNSUPPORTED" not in verification_upper:
+        state["verification_status"] = "PASS"
+        return state
+
+    if (
+        "UNSUPPORTED OR PROBLEMATIC" in verification_upper
+        or "UNSUPPORTED CLAIMS" in verification_upper
+    ):
+        state["verification_status"] = "FAIL"
+        return state
+
+    # 5. Could not confidently determine the verdict.
+    state["verification_status"] = "UNKNOWN"
 
     return state
 

@@ -10,7 +10,7 @@
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph_StateGraph-4F46E5?style=for-the-badge&logo=diagram&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React 19](https://img.shields.io/badge/Frontend-React_19_+_Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Local LLM](https://img.shields.io/badge/Local_LLM-Ollama_+_Qwen3:8b-000000?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/)
+[![Local LLM](https://img.shields.io/badge/Local_LLM-Ollama_+_Llama_3.2:3b-000000?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com/)
 [![Web Search](https://img.shields.io/badge/Search_Tool-DuckDuckGo_DDGS-de5833?style=for-the-badge&logo=duckduckgo&logoColor=white)](https://pypi.org/project/duckduckgo-search/)
 [![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Local_Vector_DB-DC2626?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
 [![Embeddings](https://img.shields.io/badge/Embeddings-384--dim_MiniLM--L6--v2-FF6F00?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
@@ -51,7 +51,7 @@
 - [💾 Vector Database & Retrieval Layer](#-vector-database--retrieval-layer)
 - [⚖️ Synthesis & Verification Engine](#️-synthesis--verification-engine)
   - [Temporal Grounding & Historical Differentiation](#temporal-grounding--historical-differentiation)
-  - [Verification & Revision Loop](#verification--revision-loop)
+  - [Robust Multi-Stage Verification & Revision Loop](#robust-multi-stage-verification--revision-loop)
 - [💻 Interactive Web Application](#-interactive-web-application)
 - [📊 Evaluation & Quality Benchmarks](#-evaluation--quality-benchmarks)
 - [📂 Repository Structure](#-repository-structure)
@@ -78,11 +78,11 @@ Navigating cancer care and oncological literature presents extreme challenges fo
 
 ### The Multi-Agent Solution
 The **Cancer Multi-Agent System** decomposes cancer inquiry answering into a stateful, compiled **LangGraph** execution graph:
-- **Deterministic Emergency Guardrail**: Instant regex-driven intercept of self-harm, suicidal distress, and acute medical emergencies with zero LLM latency and offline fallback guarantees.
+- **Deterministic Emergency Guardrail**: Instant regex-driven intercept of self-harm, suicidal distress, and acute medical emergencies with zero LLM latency and offline fallback guarantees. Emergency responses route directly to the final output node without delay or verification interference.
 - **Deep Biomedical RAG Index**: Fully ingested **103 oncology documents** (17,830 pages, 31,498 structured knowledge units) preserving page citations, chapters, and sections.
 - **Dynamic Temporal Grounding**: Separates historical institutional guidelines from real-time external research (FDA, NCI, NIH, CDC, PubMed).
-- **Independent Verification & Revision Loops**: Passes every response through a dedicated Verifier Agent that audits factual claims against retrieved evidence with automatic retry capabilities.
-- **Dual-Mode Architecture**: Full live LangGraph execution combined with an agile development/mock mode for frictionless frontend development and CI/CD testing.
+- **Independent Verification & Revision Loops**: Passes every factual response through a dedicated Verifier Agent that audits claims against retrieved evidence with automatic retry capabilities.
+- **100% Local Inference & Zero-API-Cost Architecture**: Powered entirely by local Ollama models (`llama3.2:3b`), dense sentence embeddings (`all-MiniLM-L6-v2`), and DuckDuckGo search.
 
 <div align="center">
   <img src="assets/virtual-tumor-board.jpg" alt="Virtual Tumor Board Command Center" width="90%" style="border-radius: 10px; margin: 20px 0; box-shadow: 0 6px 20px rgba(0,0,0,0.12);" />
@@ -112,15 +112,15 @@ flowchart TD
 
     Start([🟢 User Inquiry]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
     
-    %% Emergency Branch
+    %% Deterministic Emergency Branch (Direct bypass to Final)
     Router -->|Intent: Crisis / Emergency / Self-Harm| EmergencyNode[🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>]:::emergStyle
-    EmergencyNode --> SynthesisNode[⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>]:::synthStyle
+    EmergencyNode -->|Bypass verification directly| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code><br><em>verification_status: NOT_APPLICABLE</em>]:::finalStyle
 
     %% RAG & Research Branches
     Router -->|Intent: Faculty Knowledge| RAGNode[📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>]:::ragStyle
     subgraph RAG_Layer ["💾 Local RAG Knowledge Engine (103 Docs | 31,498 Units)"]
         RAGNode <--> EmbedModel[🧠 MiniLM-L6-v2 Embeddings]:::ragStyle
-        EmbedModel <--> QdrantDB[(💾 Qdrant Local Vector DB<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
+        EmbedModel <--> QdrantDB[(💾 Qdrant Local Vector DB / NumPy<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
     end
 
     Router -->|Intent: Emerging / 2026 Advances| ResearchNode[🌐 External Research Node<br><code>backend/graph/research_node.py</code>]:::resStyle
@@ -130,25 +130,25 @@ flowchart TD
         ResearchNode <--> RecencyGuard[🛡️ Deterministic Recency Safeguard<br><em>CURRENT ➔ POSSIBLY_CURRENT</em>]:::resStyle
     end
 
-    subgraph LLM_Runtime ["🤖 Multi-Model Inference Runtime"]
-        OllamaLocal[🦙 Local Ollama <code>qwen3:8b</code><br><em>Private, Offline, Zero-Cost</em>]:::localModel
-        CloudOpenAI[☁️ OpenAI API <code>gpt-5.6-luna</code><br><em>Optional Cloud Fallback</em>]:::localModel
+    subgraph LLM_Runtime ["🤖 Local Ollama Inference Runtime"]
+        OllamaLocal[🦙 Local Ollama <code>llama3.2:3b</code><br><em>100% Private, Offline, Zero-Cost</em>]:::localModel
     end
 
     ResearchNode -.-> LLM_Runtime
     SynthesisNode -.-> LLM_Runtime
     VerifierNode -.-> LLM_Runtime
 
-    RAGNode -->|Conditional: If Recent Updates Required| ResearchNode
-    RAGNode -->|Otherwise| SynthesisNode
+    Router -->|Intent: Faculty & Research| RAGNode
+    RAGNode -->|Conditional: If Recent Updates Needed| ResearchNode
+    RAGNode -->|Standard Clinical Evidence| SynthesisNode[⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>]:::synthStyle
     ResearchNode --> SynthesisNode
     
     %% Synthesis & Verification Loop
-    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code><br><em>Multi-Format Verdict Extraction</em>]:::verifStyle
+    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code><br><em>5-Tier Robust Verdict Extraction</em>]:::verifStyle
 
-    VerifierNode -->|Verdict: PASS| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code>]:::finalStyle
-    VerifierNode -.->|Verdict: FAIL &amp; Attempts &lt; 2| ResearchNode
-    VerifierNode -->|Attempts &ge; 2 Fallback| FinalNode
+    VerifierNode -->|Verdict: PASS| FinalNode
+    VerifierNode -.->|Verdict: FAIL &amp; Attempts &lt; 2 &amp; needs_research| ResearchNode
+    VerifierNode -->|Attempts &ge; 2 or Non-Research Fallback| FinalNode
 
     FinalNode --> End([🏁 Verified Response + Sources + Audit Trace]):::outStyle
 ```
@@ -165,9 +165,9 @@ sequenceDiagram
     participant Emergency as 🚨 Emergency Node
     participant RAG as 📚 Faculty RAG Node
     participant Tool as 🦆 DuckDuckGo Search Tool
-    participant Research as 🌐 Research Agent (Qwen3)
-    participant Synth as ⚖️ Synthesis Node (Qwen3)
-    participant Verifier as 🔍 Verification Node (Qwen3)
+    participant Research as 🌐 Research Agent (Llama 3.2)
+    participant Synth as ⚖️ Synthesis Node (Llama 3.2)
+    participant Verifier as 🔍 Verification Node (Llama 3.2)
     participant Final as 📋 Final Node
 
     User->>Router: "What is the latest 2026 FDA approved treatment for melanoma?"
@@ -187,12 +187,12 @@ sequenceDiagram
 
     Synth->>Synth: Synthesize response explicitly differentiating 2018 baseline from 2026 therapies
     Synth->>Verifier: Submit proposed draft + raw retrieved evidence
-    Note over Verifier: Audit claims against evidence; extract verdict via resilient parser
+    Note over Verifier: Audit claims against evidence; extract verdict via 5-tier resilient parser
 
     alt Verification PASS
         Verifier->>Final: Verdict PASS (Confidence: HIGH)
         Final-->>User: Verified Response + Verification Badge + Page Citations
-    else Verification FAIL (Attempts < 2)
+    else Verification FAIL (Attempts < 2 & needs_research)
         Verifier->>Research: Flag unsupported claim & request targeted evidence
         Research->>Tool: Targeted query with secondary sources
         Tool-->>Research: Refined clinical trial evidence
@@ -203,6 +203,25 @@ sequenceDiagram
     end
 ```
 
+#### Deterministic Emergency Safety Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 👤 Crisis / Distressed User
+    participant Router as 🧭 Router Node (Deterministic Regex)
+    participant Emergency as 🚨 Emergency Safety Node
+    participant Final as 📋 Final Response Node
+
+    User->>Router: "My cancer treatment is unbearable and I want to die."
+    Note over Router: Deterministic Safety Screen intercepts instantly.<br/>Bypasses LLM classification entirely.
+    Router->>Emergency: Route directly to Emergency Node
+    Note over Emergency: Generate safe de-escalation response<br/>(100% deterministic, offline-capable, zero latency)
+    Emergency->>Final: Bypass synthesis & verification directly
+    Note over Final: Sets verification_status = "NOT_APPLICABLE"<br/>Preserves crisis resources without alteration
+    Final-->>User: Empathetic de-escalation + 988 Lifeline + Emergency services guidance
+```
+
 ---
 
 ## 👥 Specialized Agent Roster
@@ -211,13 +230,13 @@ Each agent possesses an isolated domain boundary, structured Pydantic input/outp
 
 | Agent Persona | File Path | Core Role & Operational Mechanics | Grounding Source |
 | :--- | :--- | :--- | :--- |
-| **🧭 Router & Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Performs deterministic keyword safety screening followed by LLM intent classification (local Qwen3 or OpenAI); outputs a typed `RouterDecision` configuring the graph path. | Regex rules + Structured LLM Classifier |
-| **🚨 Emergency & Safety Agent** | `backend/agents/emergency_agent.py`<br>`backend/safety/emergency_rules.py` | Detects self-harm keywords, severe depression, and acute medical red flags; provides immediate de-escalation, 988 lifeline contacts, and ER instructions with zero-latency offline fallback. | Deterministic Regex + Safe De-escalation Protocol |
-| **📚 Faculty RAG Agent** | `backend/rag/rag_agent.py`<br>`backend/graph/rag_node.py` | Queries local persistent Qdrant vector database, extracts semantic knowledge units with page/chapter/section tracking, and flags source publication dates. | Local Qdrant Store (`cancer_faculty_knowledge`) |
-| **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/tools/web_search.py`<br>`backend/graph/research_node.py` | Free DuckDuckGo multi-domain search (`site:fda.gov`, `site:cancer.gov`, `site:nih.gov`), deduplication, conservative currentness rules (Rules 15 & 16), and deterministic recency safeguard (`CURRENT` ➔ `POSSIBLY_CURRENT`). | DuckDuckGo DDGS + FDA/NCI/NIH/CDC Databases |
-| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Integrates multi-source evidence into compassionate, medically coherent answers via local Qwen3/OpenAI; explicitly contrasts historical standards with modern therapies. | Provided Evidence Payloads Only |
-| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Fact-checks every sentence against raw retrieved chunks via local Qwen3/OpenAI; uses resilient multi-pattern verdict parsing (`VERDICT: PASS/FAIL`, `FINAL VERDICT`, `CONCLUSION:`). | Raw Retrieved Context Chunks |
-| **📋 Final Response Builder** | `backend/graph/final_node.py` | Assembles final response payload, deduplicates citations, calculates execution latency, and formats agent trace logs for UI display. | Global `AgentState` |
+| **🧭 Router & Triage Agent** | `backend/agents/router_agent.py`<br>`backend/graph/router_node.py` | Performs deterministic keyword safety screening followed by local LLM intent classification (`llama3.2:3b`); outputs a typed `RouterDecision` configuring the graph path. | Regex rules + Structured LLM Classifier |
+| **🚨 Emergency & Safety Agent** | `backend/agents/emergency_agent.py`<br>`backend/safety/emergency_rules.py` | Detects self-harm keywords, severe depression, and acute medical red flags; returns deterministic safe responses with 988 lifeline and ER instructions. Zero external API calls, 100% offline-safe. | Deterministic Regex + Safe De-escalation Protocol |
+| **📚 Faculty RAG Agent** | `backend/rag/rag_agent.py`<br>`backend/graph/rag_node.py` | Queries local persistent vector database / semantic retriever, extracts knowledge units with page/chapter/section tracking, and flags source publication dates using `llama3.2:3b`. | Local Vector Index (`cancer_faculty_knowledge`) |
+| **🌐 External Research Agent** | `backend/agents/research_agent.py`<br>`backend/tools/web_search.py`<br>`backend/graph/research_node.py` | Free DuckDuckGo multi-domain search (`site:fda.gov`, `site:cancer.gov`, `site:nih.gov`), deduplication, conservative currentness rules (Rules 15 & 16), and deterministic recency safeguard (`CURRENT` ➔ `POSSIBLY_CURRENT`) via `llama3.2:3b`. | DuckDuckGo DDGS + FDA/NCI/NIH/CDC Databases |
+| **⚖️ Synthesis Agent** | `backend/agents/synthesis_agent.py`<br>`backend/graph/synthesis_node.py` | Integrates multi-source evidence into compassionate, medically coherent answers via local `llama3.2:3b`; explicitly contrasts historical standards with modern therapies. | Provided Evidence Payloads Only |
+| **🔍 Verification Agent** | `backend/agents/verifier_agent.py`<br>`backend/graph/verification_node.py` | Fact-checks claims against raw retrieved chunks via local `llama3.2:3b`; uses a 5-tier resilient parser (JSON, explicit verdict, status, long-form patterns, fallback). | Raw Retrieved Context Chunks |
+| **📋 Final Response Builder** | `backend/graph/final_node.py` | Assembles final response payload, bypasses verification for emergency responses (`NOT_APPLICABLE`), deduplicates citations, and formats agent trace logs. | Global `AgentState` |
 
 ---
 
@@ -367,25 +386,32 @@ Oncology guidance evolves rapidly. When a query involves treatments whose standa
 - The **Synthesis Agent** uses prompt rules to clearly delineate:
   > *"Historically (per 2010/2018 guidelines), high-dose Interferon alfa-2b was utilized. However, as of recent 2026 FDA updates, first-line treatment has transitioned to combination immunotherapy (e.g., Nivolumab + Relatlimab or Tudriqev)..."*
 
-### Verification & Revision Loop
+### Robust Multi-Stage Verification & Revision Loop
 The **Verification Agent** (`backend/agents/verifier_agent.py`) audits the synthesis before delivery:
-- Evaluates factual statements against retrieved context.
-- Returns a structured audit verdict:
-  ```yaml
-  VERDICT: PASS | FAIL | REVISE
-  CONFIDENCE: HIGH | MEDIUM | LOW
-  SUPPORTED_CLAIMS: ["FDA accelerated approval 2026", "Indication: PD-1 refractory"]
-  UNSUPPORTED_CLAIMS: []
-  RECOMMENDED_ACTION: PASS
+- Evaluates every factual claim against the supplied retrieved evidence only.
+- Strict System Prompt Instructions require valid JSON format:
+  ```json
+  {
+    "verdict": "PASS" or "FAIL",
+    "confidence": "HIGH" or "MEDIUM" or "LOW",
+    "supported_claims": ["..."],
+    "unsupported_or_problematic_claims": ["..."],
+    "missing_information": ["..."],
+    "recommended_action": "PASS" or "RESEARCH" or "REVISE"
+  }
   ```
-- **Resilient Multi-Format Verdict Extraction (`backend/graph/verification_node.py`)**:
-  - `VERDICT: PASS` ➔ `PASS`
-  - `VERDICT: FAIL` ➔ `FAIL`
-  - `FINAL VERDICT` / `CONCLUSION:` ➔ checks for `UNSUPPORTED` or `PROBLEMATIC` claims, setting `FAIL` if present or `PASS` otherwise.
-  - Fallback to `UNKNOWN` if no recognized format is found.
-- If the verdict is `FAIL` and attempts < `MAX_VERIFICATION_ATTEMPTS` (2), the graph automatically loops back to the Research Agent for targeted evidence collection.
+- **5-Tier Resilient Verdict Parser (`backend/graph/verification_node.py`)**:
+  Local SLMs can occasionally output text variations instead of strict JSON. The parser normalizes these through a 5-tier fallback cascade:
+  1. **Preferred Format (JSON)**: Loads JSON and reads the normalized `verdict` field (`PASS` or `FAIL`).
+  2. **Explicit Verdict Format**: Detects `"VERDICT: PASS"` or `"VERDICT: FAIL"`.
+  3. **Human-Readable Status**: Analyzes `"STATUS"` statements; checks for `"SUPPORTED"` vs `"UNSUPPORTED"` / `"PROBLEMATIC"` / `"NOT SUPPORTED"`.
+  4. **Long-Form Verifier Fallback**: Checks for `"PARTIALLY SUPPORTED"`, `"UNSUPPORTED OR PROBLEMATIC"`, or clean single-direction support.
+  5. **Safe Unknown Fallback**: Flags as `UNKNOWN` if no recognized verdict pattern is found.
+- **Conditional Research Retry Loop**:
+  - If the verdict is `FAIL`, `attempts < MAX_VERIFICATION_ATTEMPTS` (2), **and** `needs_research == True` (`route["current_research"]`), the workflow loops back to the Research Agent for targeted evidence collection.
+  - If additional research was not part of the query scope or the attempt ceiling is reached, it routes safely to `FinalNode`, which outputs a responsible, clinical disclaimer indicating verification could not be completed with sufficient certainty.
 - **Deterministic Currentness Safeguard (`backend/agents/research_agent.py`)**:
-  - Automatically identifies recency keywords (`"latest"`, `"current"`, `"newest"`, `"most recent"`, `"up-to-date"`).
+  - Automatically detects temporal keywords (`"latest"`, `"current"`, `"newest"`, `"most recent"`, `"up-to-date"`).
   - Intercepts LLM evaluations claiming `CURRENT` and conservatively normalizes them to `POSSIBLY_CURRENT` unless absolute exhaustiveness can be proven, appending clinical uncertainty notices.
 
 ---
@@ -559,8 +585,8 @@ python -m venv .venv
 # 3. Install backend dependencies (including duckduckgo-search)
 pip install fastapi uvicorn pydantic openai sentence-transformers qdrant-client pypdf langgraph python-dotenv duckduckgo-search
 
-# 4. Optional: Setup local model with Ollama (Zero API Costs)
-ollama run qwen3:8b
+# 4. Setup local model with Ollama (Zero API Costs):
+ollama run llama3.2:3b
 
 # 5. Configure environment variables
 cp .env.example .env

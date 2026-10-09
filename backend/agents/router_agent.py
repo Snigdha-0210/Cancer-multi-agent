@@ -207,6 +207,67 @@ def route_question(question: str) -> RouterDecision:
 
         decision = RouterDecision.model_validate(parsed)
 
+        # Synthesis and verification are required for ordinary answers.
+        decision.synthesis = True
+        decision.verification = True
+
+        q_lower = question.lower()
+
+        temporal_keywords = [
+            "latest",
+            "current",
+            "currently",
+            "recent",
+            "newest",
+            "updated",
+            "up-to-date",
+            "up to date",
+            "2026",
+            "fda approval",
+            "fda-approved",
+            "new approved",
+        ]
+
+        is_temporal = any(
+            keyword in q_lower
+            for keyword in temporal_keywords
+        )
+
+        asks_about_faculty_and_currentness = (
+            any(term in q_lower for term in [
+                "faculty material",
+                "faculty pdf",
+                "faculty pdfs",
+                "our pdf",
+                "our material",
+                "provided material",
+            ])
+            and any(term in q_lower for term in [
+                "current",
+                "currently",
+                "latest",
+                "up-to-date",
+                "up to date",
+            ])
+        )
+
+        if decision.emergency:
+            decision.faculty_rag = False
+            decision.current_research = False
+
+        elif asks_about_faculty_and_currentness:
+            decision.faculty_rag = True
+            decision.current_research = True
+
+        elif is_temporal:
+            decision.faculty_rag = True
+            decision.current_research = True
+
+        else:
+            # Default ordinary cancer questions to faculty RAG.
+            decision.faculty_rag = True
+            decision.current_research = False
+
         return decision
 
     except Exception as e:

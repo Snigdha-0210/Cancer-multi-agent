@@ -108,6 +108,10 @@ def ask_ollama(system_prompt: str, user_prompt: str) -> str:
         "system": system_prompt,
         "prompt": user_prompt,
         "stream": False,
+        "format": "json",
+        "options": {
+            "temperature": 0
+        },
     }
 
     request = urllib.request.Request(

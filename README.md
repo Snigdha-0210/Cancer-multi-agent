@@ -40,6 +40,7 @@
   - [The Multi-Agent Solution](#the-multi-agent-solution)
 - [🏛️ System Architecture & StateGraph](#️-system-architecture--stategraph)
   - [Compiled StateGraph Flowchart](#compiled-stategraph-flowchart)
+  - [Router Triage & Intent Decision Matrix](#-router-triage--intent-decision-matrix)
   - [End-to-End Deliberation & Verification Sequence](#end-to-end-deliberation--verification-sequence)
 - [👥 Specialized Agent Roster](#-specialized-agent-roster)
 - [🛡️ Crisis & Emergency Safety Guardrail](#️-crisis--emergency-safety-guardrail)
@@ -51,6 +52,7 @@
 - [💾 Vector Database & Retrieval Layer](#-vector-database--retrieval-layer)
 - [⚖️ Synthesis & Verification Engine](#️-synthesis--verification-engine)
   - [Temporal Grounding & Historical Differentiation](#temporal-grounding--historical-differentiation)
+  - [Fail-Closed Conservative Verification Architecture](#-fail-closed-conservative-verification-architecture)
   - [Robust Multi-Stage Verification & Revision Loop](#robust-multi-stage-verification--revision-loop)
 - [💻 Interactive Web Application](#-interactive-web-application)
 - [📊 Evaluation & Quality Benchmarks](#-evaluation--quality-benchmarks)
@@ -151,6 +153,35 @@ flowchart TD
     VerifierNode -->|Attempts &ge; 2 or Non-Research Fallback| FinalNode
 
     FinalNode --> End([🏁 Verified Response + Sources + Audit Trace]):::outStyle
+```
+
+---
+
+### 🧭 Router Triage & Intent Decision Matrix
+
+The triage system utilizes a two-tier safety and routing pipeline: a zero-latency deterministic regex screen for emergency preemption, followed by local Ollama classification with deterministic post-processing rules:
+
+```mermaid
+flowchart TD
+    classDef safe fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef danger fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fef2f2
+    classDef logic fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef route fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
+
+    Q([👤 User Question]):::route --> EmergencyCheck{🚨 Deterministic Emergency Check<br><em>Self-Harm / Crisis / Acute Medical</em>}:::logic
+    
+    EmergencyCheck -->|Pattern Detected| EmergencyPath[🚨 Emergency Route<br><code>emergency: True</code><br><code>faculty_rag: False</code><br><code>current_research: False</code>]:::danger
+    EmergencyPath --> DirectFinal[📋 Direct Bypass to Final Node<br><em>No Synthesis • No Verifier</em>]:::danger
+
+    EmergencyCheck -->|Safe| OllamaCall[🤖 Local LLM Intent Classifier<br><em>Ollama llama3.2:3b (format: json)</em>]:::logic
+
+    OllamaCall --> PostRules[⚙️ Deterministic Post-Processing Pipeline<br><code>decision.synthesis = True</code><br><code>decision.verification = True</code>]:::logic
+
+    PostRules --> TemporalCheck{Temporal Keywords?<br><em>latest, current, 2026, fda-approved...</em>}:::logic
+
+    TemporalCheck -->|Faculty Material + Current| DualRoute[📚 Faculty RAG + 🌐 Current Research<br><em>Dual Historical & Contemporary Grounding</em>]:::safe
+    TemporalCheck -->|Temporal Query Only| ResearchRoute[📚 Faculty RAG + 🌐 Current Research<br><em>Standard Base + Latest Web Findings</em>]:::safe
+    TemporalCheck -->|Standard Clinical Query| FacultyOnly[📚 Faculty RAG Only<br><code>faculty_rag: True, current_research: False</code><br><em>Guaranteed Knowledge Base Grounding</em>]:::safe
 ```
 
 ---
@@ -386,10 +417,43 @@ Oncology guidance evolves rapidly. When a query involves treatments whose standa
 - The **Synthesis Agent** uses prompt rules to clearly delineate:
   > *"Historically (per 2010/2018 guidelines), high-dose Interferon alfa-2b was utilized. However, as of recent 2026 FDA updates, first-line treatment has transitioned to combination immunotherapy (e.g., Nivolumab + Relatlimab or Tudriqev)..."*
 
+### 🔒 Fail-Closed Conservative Verification Architecture
+
+Medical information requires strict verification standards. The system implements a **fail-closed verification pipeline**: only responses that produce a valid, well-formed JSON object containing an explicit `"PASS"` or `"FAIL"` verdict are accepted. Any ambiguous prose, malformed JSON, or non-dictionary payload fails closed to `"UNKNOWN"`, preventing unverified claims from reaching the patient.
+
+```mermaid
+flowchart TD
+    classDef inputStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
+    classDef verifStyle fill:#181825,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4
+    classDef safeStyle fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5
+    classDef warnStyle fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
+    classDef failStyle fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fef2f2
+
+    Synth[⚖️ Synthesis Proposed Answer + Raw Evidence Payload]:::inputStyle --> VerifierAgent[🔍 Verifier Agent<br><em>Ollama llama3.2:3b</em><br><code>format: json</code>, <code>temperature: 0</code>]:::verifStyle
+
+    VerifierAgent --> RawJSON{Parse Valid JSON?}:::verifStyle
+    
+    RawJSON -->|JSONDecodeError / Non-Dict| UnknownFail[⚠️ UNKNOWN Verdict<br><em>Fail-Closed Triggered</em>]:::warnStyle
+    RawJSON -->|Valid Dict| VerdictField{Check <code>verdict</code> field}:::verifStyle
+
+    VerdictField -->|<code>verdict == "PASS"</code>| PassNode[✅ VERIFIED PASS<br><em>High Confidence</em>]:::safeStyle
+    VerdictField -->|<code>verdict == "FAIL"</code>| FailNode[❌ VERIFIED FAIL<br><em>Unsupported Claim Flagged</em>]:::failStyle
+    VerdictField -->|Missing / Other| UnknownFail
+
+    PassNode --> FinalApproved[📋 Final Response Node<br><em>Deliver Verified Answer + Badge</em>]:::safeStyle
+
+    FailNode --> LoopGate{attempts < 2 AND<br><code>current_research == True</code>?}:::verifStyle
+    LoopGate -->|Yes| ResearchLoop[🌐 Loop back to Research Node<br><em>Targeted Secondary Retrieval</em>]:::warnStyle
+    LoopGate -->|No| SafeDisclaimer[📋 Final Response Node<br><em>Safe Clinical Disclaimer: Verification Incomplete</em>]:::warnStyle
+
+    UnknownFail --> SafeDisclaimer
+```
+
 ### Robust Multi-Stage Verification & Revision Loop
-The **Verification Agent** (`backend/agents/verifier_agent.py`) audits the synthesis before delivery:
+
+The **Verification Agent** (`backend/agents/verifier_agent.py`) audits proposed answers against retrieved chunks before delivery:
 - Evaluates every factual claim against the supplied retrieved evidence only.
-- Strict System Prompt Instructions require valid JSON format:
+- Strict Ollama invocation enforcing JSON schema and deterministic temperature:
   ```json
   {
     "verdict": "PASS" or "FAIL",
@@ -400,13 +464,9 @@ The **Verification Agent** (`backend/agents/verifier_agent.py`) audits the synth
     "recommended_action": "PASS" or "RESEARCH" or "REVISE"
   }
   ```
-- **5-Tier Resilient Verdict Parser (`backend/graph/verification_node.py`)**:
-  Local SLMs can occasionally output text variations instead of strict JSON. The parser normalizes these through a 5-tier fallback cascade:
-  1. **Preferred Format (JSON)**: Loads JSON and reads the normalized `verdict` field (`PASS` or `FAIL`).
-  2. **Explicit Verdict Format**: Detects `"VERDICT: PASS"` or `"VERDICT: FAIL"`.
-  3. **Human-Readable Status**: Analyzes `"STATUS"` statements; checks for `"SUPPORTED"` vs `"UNSUPPORTED"` / `"PROBLEMATIC"` / `"NOT SUPPORTED"`.
-  4. **Long-Form Verifier Fallback**: Checks for `"PARTIALLY SUPPORTED"`, `"UNSUPPORTED OR PROBLEMATIC"`, or clean single-direction support.
-  5. **Safe Unknown Fallback**: Flags as `UNKNOWN` if no recognized verdict pattern is found.
+- **Fail-Closed Conservative Verdict Parser (`backend/graph/verification_node.py`)**:
+  - Enforces strict type and value validation: only dictionaries with `verdict == "PASS"` or `verdict == "FAIL"` advance.
+  - All parse errors, non-dictionary structures, and unverified formats safely default to `verification_status = "UNKNOWN"`.
 - **Conditional Research Retry Loop**:
   - If the verdict is `FAIL`, `attempts < MAX_VERIFICATION_ATTEMPTS` (2), **and** `needs_research == True` (`route["current_research"]`), the workflow loops back to the Research Agent for targeted evidence collection.
   - If additional research was not part of the query scope or the attempt ceiling is reached, it routes safely to `FinalNode`, which outputs a responsible, clinical disclaimer indicating verification could not be completed with sufficient certainty.

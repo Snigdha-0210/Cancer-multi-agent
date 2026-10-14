@@ -404,7 +404,12 @@ data/qdrant/
             └── text: "..."
 ```
 
-- **Query Execution (`retrieve.py`)**: Performs dense semantic similarity search with score thresholding, document filtering, and formatted citation payloads.
+- **Query Execution & Dense Retrieval (`backend/rag/retriever.py` & `backend/rag/retrieve.py`)**:
+  - Implements a high-throughput semantic retrieval engine (`SemanticRetriever`) powered directly by HuggingFace Transformers (`AutoTokenizer`, `AutoModel`) and PyTorch.
+  - Generates 384-dimensional query embeddings with attention-mask-weighted mean pooling and L2 unit-norm normalization (`||v||₂ = 1.0`).
+  - Evaluates cosine similarity across all 31,498 pre-computed knowledge units via optimized NumPy matrix dot product (`scores = embeddings @ query_vector`) with sub-millisecond latency.
+  - Supports offline execution with local cache snapshot resolution and automatic fallback.
+  - Enables multi-attribute filtering by document type (`patient_guideline`, `oncology_reference`) and exact source document.
 
 ---
 
@@ -453,17 +458,18 @@ flowchart TD
 
 The **Verification Agent** (`backend/agents/verifier_agent.py`) audits proposed answers against retrieved chunks before delivery:
 - Evaluates every factual claim against the supplied retrieved evidence only.
-- Strict Ollama invocation enforcing JSON schema and deterministic temperature:
+- Strict Ollama invocation enforcing native JSON Schema (`format: {"type": "object", ...}`) and deterministic temperature (`0`):
   ```json
   {
-    "verdict": "PASS" or "FAIL",
-    "confidence": "HIGH" or "MEDIUM" or "LOW",
+    "verdict": "PASS" | "FAIL",
+    "confidence": "HIGH" | "MEDIUM" | "LOW",
     "supported_claims": ["..."],
     "unsupported_or_problematic_claims": ["..."],
     "missing_information": ["..."],
-    "recommended_action": "PASS" or "RESEARCH" or "REVISE"
+    "recommended_action": "PASS" | "RESEARCH" | "REVISE"
   }
   ```
+  *(Enforced at the Ollama API decoding level via JSON schema `enum` and `required` parameters, preventing hallucinated schemas or invalid keys)*
 - **Fail-Closed Conservative Verdict Parser (`backend/graph/verification_node.py`)**:
   - Enforces strict type and value validation: only dictionaries with `verdict == "PASS"` or `verdict == "FAIL"` advance.
   - All parse errors, non-dictionary structures, and unverified formats safely default to `verification_status = "UNKNOWN"`.

@@ -2,7 +2,8 @@ from pathlib import Path
 import json
 import numpy as np
 
-from sentence_transformers import SentenceTransformer
+import torch
+from transformers import AutoTokenizer, AutoModel
 
 
 class SemanticRetriever:
@@ -35,7 +36,39 @@ class SemanticRetriever:
         self._validate_alignment()
 
         print(f"Loading embedding model: {model_name}")
-        self.model = SentenceTransformer(model_name)
+
+        model_path = Path(
+            r"C:\Users\misty\.cache\huggingface\hub\models--sentence-transformers--all-MiniLM-L6-v2\snapshots\1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+        )
+        if not model_path.exists():
+            user_cache = (
+                Path.home()
+                / ".cache"
+                / "huggingface"
+                / "hub"
+                / f"models--sentence-transformers--{model_name}"
+                / "snapshots"
+                / "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+            )
+            if user_cache.exists():
+                model_path = user_cache
+
+        use_local = model_path.exists()
+        model_source = str(model_path) if use_local else f"sentence-transformers/{model_name}"
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_source,
+            local_files_only=use_local,
+        )
+
+        self.model = AutoModel.from_pretrained(
+            model_source,
+            local_files_only=use_local,
+        )
+
+        self.model.eval()
+        self.device = torch.device("cpu")
+        self.model.to(self.device)
 
         print("Retriever ready.")
         print(f"Knowledge units: {len(self.units):,}")
@@ -161,20 +194,45 @@ class SemanticRetriever:
 
     def embed_query(self, query: str) -> np.ndarray:
         """
-        Convert a query into the same normalized embedding space
-        used by the knowledge units.
+        Convert a query into a normalized embedding
+        using the locally loaded Transformers model.
         """
 
         if not query or not query.strip():
             raise ValueError("Query cannot be empty.")
 
-        vector = self.model.encode(
+        inputs = self.tokenizer(
             query,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt",
         )
 
-        return vector.astype(np.float32)
+        inputs = {
+            key: value.to(self.device)
+            for key, value in inputs.items()
+        }
+
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+
+            token_embeddings = outputs.last_hidden_state
+            attention_mask = inputs["attention_mask"].unsqueeze(-1)
+
+            masked_embeddings = token_embeddings * attention_mask
+            summed_embeddings = masked_embeddings.sum(dim=1)
+            token_counts = attention_mask.sum(dim=1).clamp(min=1)
+
+            sentence_embedding = summed_embeddings / token_counts
+
+            normalized_embedding = torch.nn.functional.normalize(
+                sentence_embedding,
+                p=2,
+                dim=1,
+            )
+
+        return normalized_embedding[0].cpu().numpy().astype(np.float32)
 
     def search(
         self,

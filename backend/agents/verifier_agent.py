@@ -108,7 +108,44 @@ def ask_ollama(system_prompt: str, user_prompt: str) -> str:
         "system": system_prompt,
         "prompt": user_prompt,
         "stream": False,
-        "format": "json",
+        "format": {
+            "type": "object",
+            "properties": {
+                "verdict": {
+                    "type": "string",
+                    "enum": ["PASS", "FAIL"],
+                },
+                "confidence": {
+                    "type": "string",
+                    "enum": ["HIGH", "MEDIUM", "LOW"],
+                },
+                "supported_claims": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "unsupported_or_problematic_claims": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "missing_information": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "recommended_action": {
+                    "type": "string",
+                    "enum": ["PASS", "RESEARCH", "REVISE"],
+                },
+            },
+            "required": [
+                "verdict",
+                "confidence",
+                "supported_claims",
+                "unsupported_or_problematic_claims",
+                "missing_information",
+                "recommended_action",
+            ],
+            "additionalProperties": False,
+        },
         "options": {
             "temperature": 0
         },

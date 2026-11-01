@@ -6,9 +6,14 @@ from backend.graph.mock_workflow import run_mock_workflow
 
 
 app = FastAPI(
-    title="Cancer Multi-Agent AI",
-    description="Backend API for the cancer patient multi-agent assistant.",
-    version="0.3.0",
+    title="Cancer Multi-Agent AI System",
+    description=(
+        "High-precision clinical decision support API powered by LangGraph "
+        "StateGraph orchestration, grounded oncology RAG (103 textbooks & "
+        "guidelines, 31,498 knowledge units), DuckDuckGo search, deterministic "
+        "safety guardrails, and fail-closed conservative verification."
+    ),
+    version="0.4.0",
 )
 
 

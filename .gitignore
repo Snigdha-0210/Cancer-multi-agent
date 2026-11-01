@@ -48,3 +48,8 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Temporary files & logs
+*.bak
+*.log
+battery-report.html

@@ -10,3 +10,6 @@ This directory is reserved for automated end-to-end evaluation, unit tests, and 
 - `backend/graph/workflow_final_test_offline.py`: Full end-to-end LangGraph StateGraph test.
 - `backend/rag/pdf_audit.py`: 103-PDF text extraction and readability audit.
 - `backend/rag/chunk_inspector.py`: Knowledge unit distribution and ID uniqueness validator.
+- `tests/test_embedding_compatibility.py`: Cross-compatibility validator between native Transformers and SentenceTransformers.
+- `tests/test_retrieval.py`: End-to-end semantic retrieval and cosine ranking verification runner across 31,498 knowledge units.
+- `tests/ollama/test_qwen.py`: Local Ollama inference integration test.

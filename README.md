@@ -473,6 +473,9 @@ The **Verification Agent** (`backend/agents/verifier_agent.py`) audits proposed 
 - **Fail-Closed Conservative Verdict Parser (`backend/graph/verification_node.py`)**:
   - Enforces strict type and value validation: only dictionaries with `verdict == "PASS"` or `verdict == "FAIL"` advance.
   - All parse errors, non-dictionary structures, and unverified formats safely default to `verification_status = "UNKNOWN"`.
+- **Primary Ground-Truth Evidence Prioritization (`backend/graph/verification_node.py`)**:
+  - Verification is performed directly against raw retrieved PDF knowledge chunks (`=== ORIGINAL FACULTY PDF EVIDENCE ===`) with precise document and page bounds (`[Source X: doc (Pages Y-Z)]`).
+  - Synthesized RAG answers are used only as a secondary fallback if raw chunks are absent, preventing circular verification where hallucinated RAG summaries validate themselves.
 - **Conditional Research Retry Loop**:
   - If the verdict is `FAIL`, `attempts < MAX_VERIFICATION_ATTEMPTS` (2), **and** `needs_research == True` (`route["current_research"]`), the workflow loops back to the Research Agent for targeted evidence collection.
   - If additional research was not part of the query scope or the attempt ceiling is reached, it routes safely to `FinalNode`, which outputs a responsible, clinical disclaimer indicating verification could not be completed with sufficient certainty.
@@ -593,6 +596,8 @@ cancer-multi-agent/
 │
 ├── tests/                              # Diagnostic & Local Model Test Suites
 │   ├── README.md
+│   ├── test_embedding_compatibility.py # Native Transformers vs SentenceTransformers validator
+│   ├── test_retrieval.py               # End-to-end dense cosine retrieval validator (31,498 chunks)
 │   └── ollama/                         # Local Ollama & Qwen3 integration tests
 │       └── test_qwen.py                # Qwen3:8b local Ollama verification test
 │
@@ -694,11 +699,20 @@ python -m backend.rag.qdrant_store
 # Test local Ollama Qwen3 connectivity:
 python -m tests.ollama.test_qwen
 
+# Verify embedding parity (Transformers vs SentenceTransformers):
+python tests/test_embedding_compatibility.py
+
+# Verify dense semantic retrieval over 31,498 chunks:
+python tests/test_retrieval.py
+
 # Test free DuckDuckGo search tool:
 python -m backend.tools.web_search
 
 # Test deterministic offline emergency guardrail:
 python -m backend.graph.emergency_node_test_offline
+
+# Test verification retry loop:
+python -m backend.graph.verification_retry_test_offline
 
 # Run full live LangGraph workflow test:
 python -m backend.graph.workflow_invoke_test

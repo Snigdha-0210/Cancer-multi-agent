@@ -223,12 +223,12 @@ def main():
 
     print()
     print("Expected behaviour:")
-    print("  First verification → FAIL")
-    print("  FAIL → Research")
-    print("  Research → Synthesis")
-    print("  Synthesis → Verification")
-    print("  Second verification → PASS")
-    print("  PASS → END")
+    print("  First verification -> FAIL")
+    print("  FAIL -> Research")
+    print("  Research -> Synthesis")
+    print("  Synthesis -> Verification")
+    print("  Second verification -> PASS")
+    print("  PASS -> END")
 
     print()
 

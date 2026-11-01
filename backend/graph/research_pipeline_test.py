@@ -47,7 +47,7 @@ def main():
     )
 
     print("=" * 70)
-    print("RESEARCH → SYNTHESIS → VERIFICATION")
+    print("RESEARCH -> SYNTHESIS -> VERIFICATION")
     print("=" * 70)
 
     # ---------------------------------------------------------

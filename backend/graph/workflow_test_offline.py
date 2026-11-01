@@ -260,26 +260,26 @@ def run_test(workflow, question, expected_path):
 
     print()
     print("EXPECTED PATH:")
-    print(" → ".join(expected_path))
+    print(" -> ".join(expected_path))
 
     print()
     print("RESULT:")
 
     if result.get("emergency_response"):
-        print("  ✓ Emergency agent executed")
+        print("  [OK] Emergency agent executed")
 
     if result.get("faculty_evidence"):
-        print("  ✓ Faculty RAG executed")
+        print("  [OK] Faculty RAG executed")
 
     if result.get("research_evidence"):
-        print("  ✓ Research agent executed")
+        print("  [OK] Research agent executed")
 
     if result.get("proposed_answer"):
-        print("  ✓ Synthesis executed")
+        print("  [OK] Synthesis executed")
 
     if result.get("verification_status"):
         print(
-            f"  ✓ Verification executed "
+            f"  [OK] Verification executed "
             f"({result['verification_status']})"
         )
 

@@ -280,9 +280,44 @@ def extract_claims(proposed_answer: str) -> str:
     Original wording is preserved to avoid changing medical meaning.
     """
 
-    claims = []
+    # Join wrapped lines while preserving separate bullet points.
+    raw_lines = proposed_answer.splitlines()
+    lines = []
+    current = []
 
-    lines = proposed_answer.splitlines()
+    for raw_line in raw_lines:
+        line = raw_line.strip()
+
+        # Blank line means the current paragraph has ended.
+        if not line:
+            if current:
+                lines.append(" ".join(current))
+                current = []
+            continue
+
+        # Detect a new bullet or numbered list item.
+        is_bullet = bool(
+            re.match(r"^[-*•]\s+|^\d+[.)]\s+", line)
+        )
+
+        # Start a new claim when another bullet begins.
+        if is_bullet and current:
+            lines.append(" ".join(current))
+            current = []
+
+        current.append(line)
+
+    # Save the final paragraph or bullet.
+    if current:
+        lines.append(" ".join(current))
+
+    # Normalize whitespace.
+    lines = [
+        re.sub(r"\s+", " ", line).strip()
+        for line in lines
+    ]
+
+    claims = []
 
     ignored_headings = {
         "sources:",
@@ -330,13 +365,7 @@ def extract_claims(proposed_answer: str) -> str:
             re.IGNORECASE,
         ):
             continue
-        # Ignore source citations after removing bullet markers.
-        if re.match(
-            r"^(source|document|reference)\b",
-            line,
-            re.IGNORECASE,
-        ):
-            continue
+
         if not line:
             continue
 
@@ -385,6 +414,7 @@ def verify_answer(
         unsupported = []
         missing = []
         confidences = []
+        recommended_actions = []
 
         # STEP 3: Verify claims in batches of three
         batch_size = 3
@@ -397,41 +427,27 @@ def verify_answer(
             print(f"VERIFYING CLAIMS {start + 1} TO {start + len(batch)}")
             print("-" * 60)
 
-            user_prompt = f"""
-            You are verifying a small list of factual claims.
+            user_prompt = f"""USER QUESTION:
+{question}
 
-            USER QUESTION:
-            {question}
+CLAIMS TO VERIFY:
+{json.dumps(batch, ensure_ascii=False)}
 
-            CLAIMS TO VERIFY:
-            {json.dumps(batch, ensure_ascii=False)}
+EVIDENCE:
+{evidence}
 
-            EVIDENCE:
-            {evidence}
+STRICT INSTRUCTIONS:
+1. Evaluate every claim separately.
+2. Copy each claim EXACTLY as written.
+3. Put supported claims in supported_claims.
+4. Put unsupported or contradicted claims in unsupported_or_problematic_claims.
+5. Do not create, rewrite, shorten, or introduce claims.
+6. Do not copy unrelated facts from the evidence.
+7. Do not use outside medical knowledge.
+8. Set missing_information to [] unless essential information is missing.
+9. Every submitted claim must appear in exactly one claim array.
 
-            STRICT INSTRUCTIONS:
-
-            1. Evaluate every claim separately.
-            2. You MUST copy each claim EXACTLY as written above.
-            3. Put a claim in supported_claims only if the evidence supports it.
-            4. Put a claim in unsupported_or_problematic_claims if the
-            evidence contradicts it or does not adequately support it.
-            5. Never create, rewrite, shorten, or introduce claims.
-            6. Never copy unrelated facts from the evidence.
-            7. Do not use outside medical knowledge.
-            8. Set missing_information to [] unless essential information
-            is missing to answer the user's question safely.
-            9. Every submitted claim must appear in exactly one of the
-            two claim arrays.
-            10. Keep confidence based on the quality of the evidence.
-
-            IMPORTANT:
-            The only permitted entries in supported_claims and
-            unsupported_or_problematic_claims are exact copies of the
-            claims listed under CLAIMS TO VERIFY.
-
-            Return the required JSON object only.
-            """
+Return the required JSON object only."""
 
             result = ask_ollama(
                 system_prompt=SYSTEM_PROMPT,
@@ -472,6 +488,9 @@ def verify_answer(
             confidences.append(
                 batch_result.get("confidence", "LOW")
             )
+            recommended_actions.append(
+                batch_result.get("recommended_action", "RESEARCH")
+            )
 
         # STEP 5: Check whether every claim was evaluated
         evaluated = set(supported) | set(unsupported)
@@ -481,14 +500,38 @@ def verify_answer(
             unsupported.extend(unevaluated)
 
         # STEP 6: Deterministic final decision
-        if unsupported:
+        if unsupported or missing:
             verdict = "FAIL"
-            action = "REVISE"
-            confidence = "MEDIUM"
+            if "RESEARCH" in recommended_actions:
+                action = "RESEARCH"
+            else:
+                action = "REVISE"
         else:
             verdict = "PASS"
             action = "PASS"
-            confidence = "HIGH"
+
+        # STEP 7: Calculate confidence from model assessments
+        confidence_levels = {
+            "LOW": 1,
+            "MEDIUM": 2,
+            "HIGH": 3,
+        }
+
+        valid_confidences = [
+            confidence_levels[c]
+            for c in confidences
+            if c in confidence_levels
+        ]
+
+        if not valid_confidences:
+            confidence = "LOW"
+        else:
+            lowest_confidence = min(valid_confidences)
+            confidence = {
+                1: "LOW",
+                2: "MEDIUM",
+                3: "HIGH",
+            }[lowest_confidence]
 
         final_result = {
             "verdict": verdict,

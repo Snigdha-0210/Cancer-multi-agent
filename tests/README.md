@@ -12,4 +12,5 @@ This directory is reserved for automated end-to-end evaluation, unit tests, and 
 - `backend/rag/chunk_inspector.py`: Knowledge unit distribution and ID uniqueness validator.
 - `tests/test_embedding_compatibility.py`: Cross-compatibility validator between native Transformers and SentenceTransformers.
 - `tests/test_retrieval.py`: End-to-end semantic retrieval and cosine ranking verification runner across 31,498 knowledge units.
+- `tests/test_direct_verifier.py`: Direct end-to-end RAG synthesis, batch claim extraction, and verifier audit runner.
 - `tests/ollama/test_qwen.py`: Local Ollama inference integration test.

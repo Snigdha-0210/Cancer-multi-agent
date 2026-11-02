@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.request
 
 
@@ -150,19 +151,64 @@ STRICT OUTPUT RULES:
 
 Do not demand irrelevant information.
 Do not invent replacement facts.
+
+CLAIM-BY-CLAIM VERIFICATION PROCEDURE:
+
+1. First identify the exact question being answered and its scope.
+
+2. Read the PROPOSED ANSWER and identify its actual factual claims.
+   Evaluate those claims, not random facts from the evidence.
+
+3. For every important claim in the proposed answer:
+   - Identify the corresponding supporting evidence.
+   - Check whether the evidence genuinely supports the claim.
+   - Check whether the answer exaggerates or changes the evidence.
+   - Record unsupported or contradicted claims when necessary.
+
+4. SUPPORTED CLAIMS must describe claims actually present in the
+   proposed answer. Do not copy unrelated facts from the evidence.
+
+5. MISSING INFORMATION must be relevant to the user's question.
+   For example, when asked about melanoma risk factors:
+   - Do not demand annual case counts.
+   - Do not demand death statistics.
+   - Do not demand unrelated survival statistics.
+   - Consider whether important risk factors from the evidence
+     have been omitted, but do not require every minor detail.
+
+6. QUESTION-SCOPE CHECK:
+   The answer must address what the user actually asked.
+   Do not evaluate it as though the user asked a different question.
+
+7. FINAL DECISION:
+   - PASS if the important claims are supported and the answer
+     adequately addresses the question.
+   - FAIL if an important claim is unsupported, contradicted,
+     misleading, or essential information is missing.
+   - REVISE when the supplied evidence is sufficient to correct
+     the answer.
+   - RESEARCH when additional evidence is genuinely necessary.
+
+8. Before returning JSON, check that every item in
+   supported_claims and unsupported_or_problematic_claims
+   refers to something actually stated in the proposed answer.
+
 Do not approve unsupported medical claims.
 """
 
 
 
-def ask_ollama(system_prompt: str, user_prompt: str) -> str:
-
+def ask_ollama(
+    system_prompt: str,
+    user_prompt: str,
+    output_schema: dict | None = None,
+) -> str:
     payload = {
         "model": MODEL_NAME,
         "system": system_prompt,
         "prompt": user_prompt,
         "stream": False,
-        "format": {
+        "format":output_schema or {
             "type": "object",
             "properties": {
                 "verdict": {
@@ -174,17 +220,20 @@ def ask_ollama(system_prompt: str, user_prompt: str) -> str:
                     "enum": ["HIGH", "MEDIUM", "LOW"],
                 },
                 "supported_claims": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "unsupported_or_problematic_claims": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "missing_information": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": 5,
+},
+"unsupported_or_problematic_claims": {
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": 5,
+},
+"missing_information": {
+    "type": "array",
+    "items": {"type": "string"},
+    "maxItems": 5,
+},
                 "recommended_action": {
                     "type": "string",
                     "enum": ["PASS", "RESEARCH", "REVISE"],
@@ -219,90 +268,258 @@ def ask_ollama(system_prompt: str, user_prompt: str) -> str:
     return result["response"]
 
 
+def extract_claims(proposed_answer: str) -> str:
+    """
+    Extract factual statements without rewriting them.
+
+    Supports:
+    - Bullet-point answers
+    - Numbered lists
+    - Ordinary paragraphs
+
+    Original wording is preserved to avoid changing medical meaning.
+    """
+
+    claims = []
+
+    lines = proposed_answer.splitlines()
+
+    ignored_headings = {
+        "sources:",
+        "references:",
+        "disclaimer:",
+    }
+
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            continue
+
+        # Ignore heading-only lines.
+        if line.endswith(":"):
+            continue
+
+        # Ignore headings and source-list entries.
+        if line.lower() in ignored_headings:
+            continue
+
+        if line.lower().startswith(
+            ("source:", "document:", "reference:")
+        ):
+            continue
+
+        # Remove common bullet and numbered-list markers.
+        line = re.sub(
+            r"^\s*(?:[-*•]|\d+[.)])\s*",
+            "",
+            line,
+        ).strip()
+        # Ignore source citations after removing bullet markers.
+        if re.match(
+            r"^(source|document|reference)\b",
+            line,
+            re.IGNORECASE,
+        ):
+            continue
+
+        # Ignore PDF filenames and page references in source lists.
+        if ".pdf" in line.lower() or re.search(
+            r"\bpages?\s+\d",
+            line,
+            re.IGNORECASE,
+        ):
+            continue
+        # Ignore source citations after removing bullet markers.
+        if re.match(
+            r"^(source|document|reference)\b",
+            line,
+            re.IGNORECASE,
+        ):
+            continue
+        if not line:
+            continue
+
+        # Split ordinary paragraphs into individual sentences.
+        sentences = re.split(
+            r'(?<=[.!?])\s+(?=[A-Z0-9])',
+            line,
+        )
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+
+            if len(sentence) > 15:
+                claims.append(sentence)
+
+    # Remove duplicate statements while preserving order.
+    claims = list(dict.fromkeys(claims))
+
+    return json.dumps({"claims": claims}, ensure_ascii=False)
+
+
 def verify_answer(
     question: str,
     proposed_answer: str,
     evidence: str,
 ) -> str:
 
-    user_prompt = f"""
-USER QUESTION:
-
-{question}
-
-
-PROPOSED ANSWER:
-
-{proposed_answer}
-
-
-EVIDENCE:
-
-{evidence}
-
-
-Verify the proposed answer against the evidence.
-
-Pay particular attention to:
-
-- factual support
-- source quality
-- source dates
-- currentness
-- patient population
-- limitations
-- uncertainty
-- whether the answer makes claims that the evidence does not
-  support
-
-IMPORTANT:
-
-Do not use your own medical knowledge to replace missing
-information.
-
-Judge the proposed answer ONLY against the supplied evidence.
-
-If a claim is not supported by the evidence, mark it as
-UNSUPPORTED OR PROBLEMATIC.
-
-If important information is missing, list it under
-MISSING INFORMATION.
-
-Return your verification using the exact structure requested
-in the system instructions.
-"""
-
     try:
-        return ask_ollama(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-        )
+        # STEP 1: Extract factual claims
+        claims_result = extract_claims(proposed_answer)
+        claims_data = json.loads(claims_result)
+        claims = claims_data.get("claims", [])
+
+        if not isinstance(claims, list) or not claims:
+            raise ValueError("No factual claims extracted.")
+
+        print("\n" + "=" * 60)
+        print("EXTRACTED CLAIMS")
+        print("=" * 60)
+
+        for i, claim in enumerate(claims, 1):
+            print(f"{i}. {claim}")
+
+        # STEP 2: Prepare result containers
+        supported = []
+        unsupported = []
+        missing = []
+        confidences = []
+
+        # STEP 3: Verify claims in batches of three
+        batch_size = 3
+
+        for start in range(0, len(claims), batch_size):
+
+            batch = claims[start:start + batch_size]
+
+            print("\n" + "-" * 60)
+            print(f"VERIFYING CLAIMS {start + 1} TO {start + len(batch)}")
+            print("-" * 60)
+
+            user_prompt = f"""
+            You are verifying a small list of factual claims.
+
+            USER QUESTION:
+            {question}
+
+            CLAIMS TO VERIFY:
+            {json.dumps(batch, ensure_ascii=False)}
+
+            EVIDENCE:
+            {evidence}
+
+            STRICT INSTRUCTIONS:
+
+            1. Evaluate every claim separately.
+            2. You MUST copy each claim EXACTLY as written above.
+            3. Put a claim in supported_claims only if the evidence supports it.
+            4. Put a claim in unsupported_or_problematic_claims if the
+            evidence contradicts it or does not adequately support it.
+            5. Never create, rewrite, shorten, or introduce claims.
+            6. Never copy unrelated facts from the evidence.
+            7. Do not use outside medical knowledge.
+            8. Set missing_information to [] unless essential information
+            is missing to answer the user's question safely.
+            9. Every submitted claim must appear in exactly one of the
+            two claim arrays.
+            10. Keep confidence based on the quality of the evidence.
+
+            IMPORTANT:
+            The only permitted entries in supported_claims and
+            unsupported_or_problematic_claims are exact copies of the
+            claims listed under CLAIMS TO VERIFY.
+
+            Return the required JSON object only.
+            """
+
+            result = ask_ollama(
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+            )
+
+            batch_result = json.loads(result)
+            # Ensure the model returned the expected JSON structure.
+            if not isinstance(batch_result, dict):
+                raise ValueError("Verifier returned an invalid JSON object.")
+
+            if not isinstance(batch_result.get("supported_claims"), list):
+                raise ValueError("Invalid supported_claims array.")
+
+            if not isinstance(
+                batch_result.get("unsupported_or_problematic_claims"), list
+            ):
+                raise ValueError("Invalid unsupported claims array.")
+            print("\nRAW VERIFIER RESPONSE:")
+            print(json.dumps(batch_result, indent=2))
+            # STEP 4: Validate model output against actual claims
+            valid_claims = set(batch)
+
+            for claim in batch_result.get("supported_claims", []):
+                if claim in valid_claims and claim not in supported:
+                    supported.append(claim)
+
+            for claim in batch_result.get(
+                "unsupported_or_problematic_claims", []
+            ):
+                if claim in valid_claims and claim not in unsupported:
+                    unsupported.append(claim)
+
+            missing.extend(
+                batch_result.get("missing_information", [])
+            )
+
+            confidences.append(
+                batch_result.get("confidence", "LOW")
+            )
+
+        # STEP 5: Check whether every claim was evaluated
+        evaluated = set(supported) | set(unsupported)
+        unevaluated = [claim for claim in claims if claim not in evaluated]
+
+        if unevaluated:
+            unsupported.extend(unevaluated)
+
+        # STEP 6: Deterministic final decision
+        if unsupported:
+            verdict = "FAIL"
+            action = "REVISE"
+            confidence = "MEDIUM"
+        else:
+            verdict = "PASS"
+            action = "PASS"
+            confidence = "HIGH"
+
+        final_result = {
+            "verdict": verdict,
+            "confidence": confidence,
+            "supported_claims": supported[:5],
+            "unsupported_or_problematic_claims": unsupported[:5],
+            "missing_information": missing[:5],
+            "recommended_action": action,
+        }
+
+        return json.dumps(final_result, indent=2)
 
     except Exception as e:
 
-        print()
-        print("=" * 70)
-        print("VERIFICATION AGENT — LOCAL MODEL UNAVAILABLE")
+        print("\n" + "=" * 70)
+        print("VERIFICATION AGENT - VERIFICATION ERROR")
         print("=" * 70)
         print(f"Reason: {e}")
 
-        return """VERDICT: UNKNOWN
-
-CONFIDENCE: LOW
-
-SUPPORTED CLAIMS:
-- Verification could not be completed because the verification model is unavailable.
-
-UNSUPPORTED OR PROBLEMATIC CLAIMS:
-- The proposed answer could not be fully checked.
-
-MISSING INFORMATION:
-- Live verification by the Verification Agent.
-
-RECOMMENDED ACTION:
-- RESEARCH: obtain verification from the Verification Agent when the model is available.
-"""
-
+        return json.dumps({
+            "verdict": "FAIL",
+            "confidence": "LOW",
+            "supported_claims": [],
+            "unsupported_or_problematic_claims": [
+                "The proposed answer could not be fully verified."
+            ],
+            "missing_information": [
+                "Successful factual claim extraction and verification."
+            ],
+            "recommended_action": "RESEARCH"
+        })
 
 def main():
 

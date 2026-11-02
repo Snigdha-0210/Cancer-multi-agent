@@ -598,6 +598,7 @@ cancer-multi-agent/
 │   ├── README.md
 │   ├── test_embedding_compatibility.py # Native Transformers vs SentenceTransformers validator
 │   ├── test_retrieval.py               # End-to-end dense cosine retrieval validator (31,498 chunks)
+│   ├── test_direct_verifier.py         # Direct RAG & claim extraction verification test
 │   └── ollama/                         # Local Ollama & Qwen3 integration tests
 │       └── test_qwen.py                # Qwen3:8b local Ollama verification test
 │
@@ -704,6 +705,9 @@ python tests/test_embedding_compatibility.py
 
 # Verify dense semantic retrieval over 31,498 chunks:
 python tests/test_retrieval.py
+
+# Test direct RAG answer synthesis and batch claim verification:
+python tests/test_direct_verifier.py
 
 # Test free DuckDuckGo search tool:
 python -m backend.tools.web_search

@@ -260,6 +260,40 @@ Important:
 - If sources disagree, explicitly mention the conflict.
 - If the evidence is insufficient, say so.
 
+STRICT EVIDENCE-TO-CLAIM RULES:
+
+- Every claim must be directly supported by at least one
+  supplied search result.
+- Never introduce a drug, approval, cancer type, biomarker,
+  indication, or treatment that is not explicitly supported
+  by the supplied evidence.
+- Do not use a source about general skin cancer to establish
+  an FDA approval for melanoma.
+- Do not use an approval for a different cancer or tumour
+  type as evidence of a melanoma approval.
+- Exclude irrelevant sources from the claims and summary.
+- Do not claim that sources disagree merely because some
+  search results are irrelevant.
+- If only one relevant approval is found, describe it as
+  the relevant approval found in the searched sources.
+- If the evidence does not establish which approval is latest,
+  explicitly state that the latest approval cannot be confirmed.
+CLAIM CITATION RULES:
+
+- Every claim MUST end with at least one source reference in this exact format: [SOURCE 1].
+- Use only source numbers that actually appear in the supplied search results.
+- Do not create a claim if the supplied sources do not support it.
+- A claim about an FDA approval must preserve the exact drug name, approval type,
+  combination treatment, patient eligibility, and relevant treatment history
+  supported by the source.
+- Keep the treatment combination separate from the patient's eligibility criteria.
+- Never invent a source reference just to satisfy this requirement.
+
+Example:
+[
+  "The FDA granted accelerated approval to Drug X in combination with Drug Y for the specific patient population described in SOURCE 1. [SOURCE 1]"
+]
+
 CRITICAL MEDICAL EVIDENCE RULES:
 
 - When reporting an FDA approval, preserve the complete approved indication
@@ -279,26 +313,19 @@ CRITICAL MEDICAL EVIDENCE RULES:
 Return JSON with exactly these fields:
 
 {{
-  "summary": "short evidence-based summary",
-  "claims": [
-    "supported claim 1",
-    "supported claim 2"
-  ],
-  "sources": [
-    {{
-      "title": "source title",
-      "organization": "organization name",
-      "url": "source URL",
-      "publication_date": "",
-      "updated_date": "",
-      "source_type": "government/medical organization/etc."
-    }}
-  ],
-  "uncertainties": [
-    "uncertainty 1"
-  ],
-  "currentness": "CURRENT / POSSIBLY_CURRENT / OUTDATED / UNKNOWN"
+    "summary": "short evidence-based summary",
+    "claims": [
+        "supported claim 1 [SOURCE 1]",
+        "supported claim 2 [SOURCE 2]"
+    ],
+    "uncertainties": [
+        "uncertainty 1"
+    ],
+    "currentness": "CURRENT / POSSIBLY_CURRENT / OUTDATED / UNKNOWN"
 }}
+
+Do NOT return a sources field.
+Python will attach the original supplied sources separately.
 """
 
         # ---------------------------------------------------------
@@ -306,16 +333,67 @@ Return JSON with exactly these fields:
         # ---------------------------------------------------------
 
         raw_response = ask_ollama(prompt)
-
         parsed = json.loads(raw_response)
+        result = ResearchResult(
+            summary=parsed.get("summary", ""),
+            claims=parsed.get("claims", []),
+            sources=[
+                ResearchSource(
+                    title=source.get("title", ""),
+                    organization="FDA / Government / Medical source",
+                    url=source.get("url", ""),
+                    publication_date="",
+                    updated_date="",
+                    source_type="external web search",
+                )
+                for source in unique_results
+            ],
+            uncertainties=parsed.get("uncertainties", []),
+            currentness=parsed.get("currentness", "UNKNOWN"),
+        )
 
-        result = ResearchResult.model_validate(parsed)
+        # ---------------------------------------------------------
+        # Deterministic source-reference validation
+        # ---------------------------------------------------------
+        import re
+
+        valid_source_numbers = set(range(1, len(unique_results) + 1))
+        validated_claims = []
+
+        for claim in result.claims:
+            references = re.findall(
+                r"\[SOURCE\s+(\d+)\]",
+                claim,
+                flags=re.IGNORECASE,
+            )
+
+            # Reject claims without source references.
+            if not references:
+                result.uncertainties.append(
+                    f"A claim was excluded because it had no source reference: "
+                    f"{claim}"
+                )
+                continue
+
+            # Reject claims referencing nonexistent sources.
+            referenced_numbers = {
+                int(number) for number in references
+            }
+
+            if not referenced_numbers.issubset(valid_source_numbers):
+                result.uncertainties.append(
+                    f"A claim was excluded because it referenced an invalid "
+                    f"source number: {claim}"
+                )
+                continue
+
+            validated_claims.append(claim)
+
+        result.claims = validated_claims
 
         # ---------------------------------------------------------
         # Deterministic currentness safeguard
         # ---------------------------------------------------------
-        # For "latest/current" questions, do not blindly trust the
-        # LLM's CURRENT classification.
         latest_keywords = [
             "latest",
             "current",
@@ -323,25 +401,38 @@ Return JSON with exactly these fields:
             "most recent",
             "up-to-date",
         ]
-
         question_lower = question.lower()
-
         is_currentness_question = any(
             keyword in question_lower
             for keyword in latest_keywords
         )
 
-        if (
-            is_currentness_question
-            and result.currentness.upper() == "CURRENT"
-        ):
+        if is_currentness_question:
             result.currentness = "POSSIBLY_CURRENT"
-
             result.uncertainties.append(
-                "The search found recent relevant sources, but the "
-                "available evidence does not independently establish "
-                "that no newer relevant development exists."
+                "The searched sources contain relevant information, "
+                "but the available search evidence does not establish "
+                "that no newer relevant approval or development exists."
             )
+
+            # Avoid presenting an unverified absence of newer
+            # approvals as an established fact.
+            unsupported_latest_phrases = [
+                "no later approval was found",
+                "no newer approval was found",
+                "this is the latest approval",
+                "this is definitively the latest",
+                "no newer development exists",
+            ]
+            for phrase in unsupported_latest_phrases:
+                if phrase in result.summary.lower():
+                    result.summary = (
+                        result.summary.replace(
+                            phrase,
+                            "no later relevant approval was established "
+                            "by the available search evidence",
+                        )
+                    )
 
         return result
 

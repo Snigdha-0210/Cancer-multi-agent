@@ -1,3 +1,5 @@
+import json
+
 from backend.agents.research_agent import research_question
 from backend.graph.state import AgentState
 
@@ -57,7 +59,42 @@ def research_node(state: AgentState) -> AgentState:
     if not question.strip():
         raise ValueError("Question cannot be empty.")
 
-    result = research_question(question)
+    verification_status = state.get(
+        "verification_status",
+        "",
+    )
+
+    if verification_status == "FAIL":
+        verification_result = state.get("verification", "")
+
+        try:
+            verification_data = json.loads(verification_result)
+            unsupported_claims = verification_data.get(
+                "unsupported_or_problematic_claims",
+                [],
+            )
+            missing_information = verification_data.get(
+                "missing_information",
+                [],
+            )
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            unsupported_claims = []
+            missing_information = []
+
+        research_query = (
+            f"Original question: {question}\n\n"
+            "The previous answer failed verification. "
+            "Investigate the following issues using reliable, "
+            "authoritative and current sources:\n\n"
+            "Unsupported claims:\n"
+            + "\n".join(f"- {claim}" for claim in unsupported_claims)
+            + "\n\nMissing information:\n"
+            + "\n".join(f"- {item}" for item in missing_information)
+        )
+    else:
+        research_query = question
+
+    result = research_question(research_query)
 
     state["research_evidence"] = format_research_result(result)
 

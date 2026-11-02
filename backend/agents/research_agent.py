@@ -132,10 +132,16 @@ def research_question(question: str) -> ResearchResult:
         # 1. Search authoritative sources first
         # ---------------------------------------------------------
 
+        # Use the original question's first line as the concise
+        # search topic. The full question, including verification
+        # feedback, will still be sent to the research LLM below.
+        search_topic = question.splitlines()[0].strip()
+
         authoritative_queries = [
-            f"{question} site:fda.gov",
-            f"{question} site:cancer.gov",
-            f"{question} site:nih.gov",
+            f"{search_topic} site:fda.gov",
+            f"{search_topic} site:cancer.gov",
+            f"{search_topic} site:nih.gov",
+            f"{search_topic} site:cdc.gov",
         ]
 
         search_results = []
@@ -253,6 +259,22 @@ Important:
 - Prefer FDA/NCI/NIH/government sources when available.
 - If sources disagree, explicitly mention the conflict.
 - If the evidence is insufficient, say so.
+
+CRITICAL MEDICAL EVIDENCE RULES:
+
+- When reporting an FDA approval, preserve the complete approved indication
+  as stated in the FDA source.
+- Include relevant patient eligibility restrictions, disease stage,
+  prior-treatment requirements, and combination-treatment requirements.
+- Never generalize an approval for a specific patient population to all
+  patients with that cancer.
+- Do not omit restrictions simply to make the summary shorter.
+- If the search snippet does not provide the complete indication, state
+  that the complete indication must be checked on the FDA page.
+- Distinguish an FDA approval from clinical-trial results, investigational
+  treatments, and off-label use.
+- Do not describe a treatment as the latest unless the evidence
+  establishes that conclusion.
 
 Return JSON with exactly these fields:
 

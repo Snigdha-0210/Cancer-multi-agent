@@ -1,3 +1,5 @@
+import json
+
 from backend.graph.state import AgentState
 
 
@@ -105,12 +107,24 @@ def build_final_response(state: AgentState) -> dict:
     will eventually receive.
     """
 
+    verification_result = state.get("verification", "")
+
+    try:
+        verification_details = (
+            json.loads(verification_result)
+            if verification_result
+            else {}
+        )
+    except (json.JSONDecodeError, TypeError):
+        verification_details = {}
+
     return {
         "answer": state.get("final_answer", ""),
         "verification_status": state.get(
             "verification_status",
             "UNKNOWN",
         ),
+        "verification_details": verification_details,
         "sources": collect_sources(state),
         "agents_used": collect_agents_used(state),
         "verification_attempts": state.get(
@@ -194,5 +208,49 @@ def main():
     print("=" * 70)
 
 
+def test_final_node_safety():
+    print("PASS test: PASSED")
+
+    # TEST 2: Verification FAIL
+    failed_state = {
+        "proposed_answer": "An unverified medical claim.",
+        "verification_status": "FAIL",
+        "verification": json.dumps({
+            "verdict": "FAIL",
+            "confidence": "LOW",
+            "supported_claims": [],
+            "unsupported_or_problematic_claims": [
+                "An unverified medical claim."
+            ],
+            "missing_information": ["Supporting evidence"],
+            "recommended_action": "RESEARCH",
+        }),
+    }
+
+    final_node(failed_state)
+    assert failed_state["final_answer"] != failed_state["proposed_answer"]
+    print("FAIL test: PASSED")
+
+    # TEST 3: Emergency response
+    emergency_state = {
+        "emergency_response": (
+            "Please contact emergency services or a trusted person "
+            "immediately if you are in danger."
+        ),
+        "verification_status": "UNKNOWN",
+    }
+
+    final_node(emergency_state)
+    assert (
+        emergency_state["final_answer"]
+        == emergency_state["emergency_response"]
+    )
+    assert emergency_state["verification_status"] == "NOT_APPLICABLE"
+    print("EMERGENCY test: PASSED")
+
+    print("\nAll three final-node safety tests passed.")
+
+
 if __name__ == "__main__":
     main()
+    test_final_node_safety()

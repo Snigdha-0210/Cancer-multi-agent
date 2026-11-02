@@ -48,6 +48,8 @@ class AgentState(TypedDict, total=False):
 
     verification: str
     verification_status: str
+    verification_recommended_action: str
+    verification_confidence: str
 
     # Number of verification/revision cycles.
     verification_attempts: int

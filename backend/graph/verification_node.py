@@ -77,6 +77,24 @@ def verification_node(state: AgentState) -> AgentState:
 
     evidence = build_verification_evidence(state)
 
+    if not evidence.strip():
+        state["verification"] = json.dumps({
+            "verdict": "FAIL",
+            "confidence": "LOW",
+            "supported_claims": [],
+            "unsupported_or_problematic_claims": [
+                "The proposed answer could not be verified because no evidence was available."
+            ],
+            "missing_information": [
+                "Faculty PDF evidence or current research evidence."
+            ],
+            "recommended_action": "RESEARCH",
+        }, indent=2)
+        state["verification_status"] = "FAIL"
+        state["verification_recommended_action"] = "RESEARCH"
+        state["verification_confidence"] = "LOW"
+        return state
+
     verification_result = verify_answer(
         question=question,
         proposed_answer=proposed_answer,
@@ -99,7 +117,16 @@ def verification_node(state: AgentState) -> AgentState:
 
         if not isinstance(verification_data, dict):
             state["verification_status"] = "UNKNOWN"
+            state["verification_recommended_action"] = "RESEARCH"
+            state["verification_confidence"] = "LOW"
             return state
+
+        state["verification_recommended_action"] = str(
+            verification_data.get("recommended_action", "RESEARCH")
+        ).strip().upper()
+        state["verification_confidence"] = str(
+            verification_data.get("confidence", "LOW")
+        ).strip().upper()
 
         verdict = str(
             verification_data.get("verdict", "")
@@ -114,9 +141,14 @@ def verification_node(state: AgentState) -> AgentState:
             return state
 
     except (json.JSONDecodeError, TypeError, AttributeError):
-        pass
+        state["verification_status"] = "UNKNOWN"
+        state["verification_recommended_action"] = "RESEARCH"
+        state["verification_confidence"] = "LOW"
+        return state
 
     state["verification_status"] = "UNKNOWN"
+    state["verification_recommended_action"] = "RESEARCH"
+    state["verification_confidence"] = "LOW"
     return state
 
 

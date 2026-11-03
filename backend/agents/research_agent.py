@@ -510,9 +510,24 @@ STRICT EVIDENCE-TO-CLAIM RULES:
   explicitly state that the latest approval cannot be confirmed.
 CLAIM CITATION RULES:
 
-- Every claim MUST end with at least one valid source reference.
-- Use only source numbers supplied in the evidence block.
+- Every claim MUST end with at least one source reference.
+- The ONLY permitted citation format is exactly:
+  [SOURCE 1]
+  [SOURCE 2]
+  [SOURCE 3]
+- NEVER use these formats:
+  [1]
+  (1)
+  Source 1
+  [source 1]
+  [SOURCE_1]
+- Always write the word SOURCE in uppercase, followed by
+  one space and the source number inside square brackets.
+- Use only source numbers that exist in the supplied evidence.
 - Each claim must communicate one distinct, useful fact.
+- Each cited source must directly support the claim.
+- Never cite a source merely because it discusses the same
+  general cancer category.
 - Do not create claims that merely repeat another claim.
 - Do not create vague claims such as:
   "This approval is for the specific patient population described in SOURCE 1."
@@ -526,7 +541,7 @@ CLAIM CITATION RULES:
 
 Example:
 [
-  "The FDA granted accelerated approval to Drug X in combination with Drug Y for the specific patient population described in SOURCE 1. [SOURCE 1]"
+  "The FDA granted approval to Drug X for the specific patient population described in the FDA announcement. [SOURCE 1]"
 ]
 
 CRITICAL MEDICAL EVIDENCE RULES:

@@ -80,6 +80,27 @@ IMPORTANT RULES:
     must use cautious wording such as "the latest approval found
     in the searched sources" rather than claiming it is definitively
     the latest approval.
+
+CRITICAL CITATION FORMAT — FOLLOW EXACTLY:
+
+Every factual claim must identify at least one supporting source.
+
+The supplied sources have unique identifiers such as:
+SRC_A01
+SRC_A02
+SRC_A03
+
+Use ONLY the exact SOURCE_ID values appearing in the supplied
+research evidence.
+
+Never invent a source ID.
+Never use webpage numbers, dates, reference numbers, or ordinary
+numeric citations as source IDs.
+
+If no supplied source supports a claim, omit that claim.
+
+The output must use source_ids as an array of strings.
+Do not put citation markers inside the claim text.
 """
 
 
@@ -100,13 +121,21 @@ class ResearchResult(BaseModel):
     currentness: str = ""
 
 
-def ask_ollama(prompt: str) -> str:
+def ask_ollama(
+    prompt: str,
+    system_prompt: str = SYSTEM_PROMPT,
+) -> str:
     payload = {
         "model": MODEL_NAME,
-        "system": SYSTEM_PROMPT,
+        "system": system_prompt,
         "prompt": prompt,
         "stream": False,
         "format": "json",
+        "options": {
+            "temperature": 0.1,
+            "num_ctx": 8192,
+            "num_predict": 1200,
+        },
     }
 
     request = urllib.request.Request(
@@ -119,7 +148,16 @@ def ask_ollama(prompt: str) -> str:
     with urllib.request.urlopen(request, timeout=180) as response:
         result = json.loads(response.read().decode("utf-8"))
 
-    return result["response"]
+    print("\nOLLAMA DIAGNOSTICS")
+    print("-" * 50)
+    print("Model:", result.get("model"))
+    print("Done reason:", result.get("done_reason"))
+    print("Prompt tokens:", result.get("prompt_eval_count"))
+    print("Generated tokens:", result.get("eval_count"))
+    print("Response:", repr(result.get("response")))
+    print("-" * 50)
+
+    return result.get("response", "")
 
 
 def extract_webpage_with_retry(url: str, attempts: int = 3):
@@ -145,6 +183,80 @@ def extract_webpage_with_retry(url: str, attempts: int = 3):
         "content": "",
         "success": False,
     }
+
+
+def verify_claim_support(claim: str, sources: list) -> tuple[bool, str]:
+    """
+    Check whether the cited source content directly supports a claim.
+    Returns:
+        (True, reason) if supported.
+        (False, reason) if unsupported or verification fails.
+    """
+    import re
+
+    # Extract source references from the claim.
+    references = re.findall(
+        r"\[SOURCE\s+(\d+)\]",
+        claim,
+        flags=re.IGNORECASE,
+    )
+    if not references:
+        return False, "Claim has no source references."
+
+    # Remove duplicate references.
+    references = list(dict.fromkeys(int(ref) for ref in references))
+
+    evidence_parts = []
+    for source_number in references:
+        if source_number < 1 or source_number > len(sources):
+            return False, f"Invalid source reference: {source_number}"
+        source = sources[source_number - 1]
+        content = (
+            source.get("full_content", "")
+            or source.get("snippet", "")
+            or ""
+        )
+        evidence_parts.append(
+            f"SOURCE {source_number}:\n"
+            f"Title: {source.get('title', '')}\n"
+            f"URL: {source.get('url', '')}\n"
+            f"Content:\n{content[:4000]}"
+        )
+
+    verification_evidence = "\n\n".join(evidence_parts)
+
+    verification_prompt = f"""Claim to verify:
+{claim}
+
+Cited source evidence:
+{verification_evidence}
+
+Does the cited source evidence directly support the factual accuracy of this claim?
+Respond in JSON format with:
+{{
+    "supported": true,
+    "reason": "Brief explanation of why the source supports or does not support the claim"
+}}
+"""
+
+    verification_system = (
+        "You are a strict medical evidence verifier. "
+        "Your task is to confirm whether a claim is directly supported by the cited evidence. "
+        "If the evidence does not corroborate the specific drug, indication, approval, or cancer type, "
+        "set supported to false. Only return supported as true when the cited source directly confirms the claim."
+    )
+
+    try:
+        raw_response = ask_ollama(
+            verification_prompt,
+            system_prompt=verification_system,
+        )
+        parsed = json.loads(raw_response)
+        supported = parsed.get("supported") is True
+        reason = parsed.get("reason", "No reason provided.")
+        return supported, reason
+    except Exception as error:
+        return False, f"Verification failed: {error}"
 
 
 def research_question(question: str) -> ResearchResult:
@@ -409,15 +521,16 @@ def research_question(question: str) -> ResearchResult:
                 result["full_content"] = ""
 
         # ---------------------------------------------------------
-        # 4. Prepare evidence for Qwen3
+        # 4. Prepare evidence using unique source IDs
         # ---------------------------------------------------------
-
         evidence_text = []
+        source_id_to_number = {}
 
         for index, result in enumerate(unique_results, 1):
+            source_id = f"SRC_A{index:02d}"
+            source_id_to_number[source_id] = index
             evidence_text.append(
-                f"""
-SOURCE {index}
+                f"""SOURCE_ID: {source_id}
 
 Title:
 {result.get("title", "")}
@@ -443,6 +556,23 @@ Research question:
 External web search results:
 
 {evidence_block}
+
+IMPORTANT SOURCE ID RULES:
+
+The supplied evidence contains exactly {len(unique_results)} sources.
+
+The ONLY valid source IDs are the SOURCE_ID labels explicitly
+shown in the supplied evidence.
+
+Valid IDs are:
+{", ".join(source_id_to_number.keys())}
+
+For every claim:
+- Select source_ids only from this exact list.
+- Copy each ID exactly as written.
+- Never use numbers found inside webpage content as source IDs.
+- Never create or modify a source ID.
+- If you cannot identify a supporting source, omit the claim.
 
 Using ONLY the supplied search results, produce a structured
 research result.
@@ -510,39 +640,26 @@ STRICT EVIDENCE-TO-CLAIM RULES:
   explicitly state that the latest approval cannot be confirmed.
 CLAIM CITATION RULES:
 
-- Every claim MUST end with at least one source reference.
-- The ONLY permitted citation format is exactly:
-  [SOURCE 1]
-  [SOURCE 2]
-  [SOURCE 3]
-- NEVER use these formats:
-  [1]
-  (1)
-  Source 1
-  [source 1]
-  [SOURCE_1]
-- Always write the word SOURCE in uppercase, followed by
-  one space and the source number inside square brackets.
-- Use only source numbers that exist in the supplied evidence.
+- Every claim must have at least one supporting source.
+- Each claim must be a JSON object with exactly two fields:
+  "text": the factual claim as a string.
+  "source_ids": an array of source ID strings.
+
+- Every source ID must exactly match a SOURCE_ID label
+  supplied in the evidence.
+- Use only sources that directly support the claim.
+- Never invent source IDs.
+- Do not include citations inside the text field.
+- If no supplied source supports a claim, omit that claim.
 - Each claim must communicate one distinct, useful fact.
-- Each cited source must directly support the claim.
-- Never cite a source merely because it discusses the same
-  general cancer category.
-- Do not create claims that merely repeat another claim.
-- Do not create vague claims such as:
-  "This approval is for the specific patient population described in SOURCE 1."
-- When reporting an FDA approval, include the exact drug name,
-  approval type, combination treatment, and patient eligibility
-  when these details are supported by the evidence.
-- Keep the treatment combination separate from patient eligibility.
-- If the supplied evidence does not establish a detail, explicitly
-  state that it could not be confirmed.
-- Never invent a source reference or medical detail.
+- Preserve exact FDA approval type, drug name, combination,
+  and patient eligibility when supported by the source.
 
 Example:
-[
-  "The FDA granted approval to Drug X for the specific patient population described in the FDA announcement. [SOURCE 1]"
-]
+{{
+  "text": "The FDA granted accelerated approval to Drug X for the specified patient population.",
+  "source_ids": ["SRC_A01"]
+}}
 
 CRITICAL MEDICAL EVIDENCE RULES:
 
@@ -565,14 +682,25 @@ Return JSON with exactly these fields:
 {{
     "summary": "short evidence-based summary",
     "claims": [
-        "supported claim 1 [SOURCE 1]",
-        "supported claim 2 [SOURCE 2]"
+        {{
+            "text": "A factual claim supported by the supplied evidence.",
+            "source_ids": ["SRC_A01"]
+        }},
+        {{
+            "text": "Another factual claim supported by the supplied evidence.",
+            "source_ids": ["SRC_A02", "SRC_A03"]
+        }}
     ],
     "uncertainties": [
         "uncertainty 1"
     ],
     "currentness": "CURRENT / POSSIBLY_CURRENT / OUTDATED / UNKNOWN"
 }}
+
+IMPORTANT:
+- claims MUST be an array of objects, not strings.
+- source_ids MUST contain exact source ID strings.
+- Do not put citation markers inside claim text.
 
 Do NOT return a sources field.
 Python will attach the original supplied sources separately.
@@ -690,6 +818,64 @@ Python will attach the original supplied sources separately.
                 )
                 break
 
+        # ---------------------------------------------------------
+        # Convert structured source IDs into citation markers
+        # ---------------------------------------------------------
+        normalized_claims = []
+        for item in parsed.get("claims", []):
+            # Preserve claims generated by the deterministic FDA safeguard.
+            if isinstance(item, str):
+                references = re.findall(
+                    r"\[SOURCE\s+(\d+)\]",
+                    item,
+                    flags=re.IGNORECASE,
+                )
+                if not references:
+                    continue
+                numbers = [int(number) for number in references]
+                if any(
+                    number not in range(1, len(unique_results) + 1)
+                    for number in numbers
+                ):
+                    continue
+                normalized_claims.append(item.strip())
+                continue
+
+            if not isinstance(item, dict):
+                continue
+            claim_text = item.get("text", "")
+            source_ids = item.get("source_ids", [])
+            if not isinstance(claim_text, str):
+                continue
+            claim_text = claim_text.strip()
+            if not claim_text or not isinstance(source_ids, list):
+                continue
+            if not source_ids:
+                continue
+            # Every ID must be a valid string from our source map.
+            if any(
+                not isinstance(source_id, str)
+                or source_id not in source_id_to_number
+                for source_id in source_ids
+            ):
+                print(
+                    "Rejected claim because it contained an "
+                    "invalid source ID:",
+                    source_ids,
+                )
+                continue
+
+            # Remove duplicate IDs while preserving order
+            source_ids = list(dict.fromkeys(source_ids))
+
+            citations = " ".join(
+                f"[SOURCE {source_id_to_number[source_id]}]"
+                for source_id in source_ids
+            )
+            normalized_claims.append(f"{claim_text} {citations}")
+
+        parsed["claims"] = normalized_claims
+
         result = ResearchResult(
             summary=parsed.get("summary", ""),
             claims=parsed.get("claims", []),
@@ -748,14 +934,44 @@ Python will attach the original supplied sources separately.
         result.claims = validated_claims
 
         # ---------------------------------------------------------
+        # Claim-evidence verification
+        # ---------------------------------------------------------
+        evidence_verified_claims = []
+        print("\n" + "=" * 70)
+        print("CLAIM-EVIDENCE VERIFICATION")
+        print("=" * 70)
+
+        for claim in result.claims:
+            print(f"\nVerifying claim:\n{claim}")
+            supported, reason = verify_claim_support(
+                claim,
+                unique_results,
+            )
+
+            if supported:
+                evidence_verified_claims.append(claim)
+                print("RESULT: SUPPORTED")
+                print("Reason:", reason)
+            else:
+                result.uncertainties.append(
+                    "A research claim was rejected because its "
+                    "cited evidence did not adequately support it. "
+                    f"Reason: {reason}"
+                )
+                print("RESULT: REJECTED")
+                print("Reason:", reason)
+
+        result.claims = evidence_verified_claims
+
+        # ---------------------------------------------------------
         # Fail-safe: reject an unsupported research summary
         # ---------------------------------------------------------
         if not result.claims:
             result.summary = (
                 "The available external search results did not "
                 "produce any claims that passed source-reference "
-                "validation. A reliable treatment summary "
-                "could not be established."
+                "and claim-evidence verification. A reliable "
+                "research summary could not be established."
             )
             result.currentness = "UNKNOWN"
             result.uncertainties.append(

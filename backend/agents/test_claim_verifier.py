@@ -296,3 +296,236 @@ else:
         "TEST FAILED: Conflicting evidence was accepted. "
         "The verifier needs stronger conflict detection."
     )
+
+    # ---------------------------------------------------------
+# TEST 10: Partial evidence verification
+# ---------------------------------------------------------
+
+partial_sources = [
+    {
+        "title": "Example FDA approval announcement",
+        "url": "https://example.com/lung-approval",
+        "snippet": "Drug ABC received FDA approval for lung cancer.",
+        "full_content": (
+            "The FDA approved Drug ABC for the treatment "
+            "of advanced non-small cell lung cancer in adults."
+        ),
+    }
+]
+
+partial_claim = (
+    "The FDA approved Drug ABC for the treatment "
+    "of advanced melanoma. [SOURCE 1]"
+)
+
+partial_supported, partial_reason = verify_claim_support(
+    partial_claim,
+    partial_sources,
+)
+
+print("\n" + "=" * 60)
+print("PARTIAL EVIDENCE VERIFICATION TEST")
+print("=" * 60)
+print("Supported:", partial_supported)
+print("Reason:", partial_reason)
+print("=" * 60)
+
+if partial_supported is False:
+    print("TEST PASSED: Partially supported claim was rejected.")
+else:
+    print(
+        "TEST FAILED: The verifier accepted a claim "
+        "whose cancer type was not supported."
+    )
+
+    # ---------------------------------------------------------
+# TEST 11: Wrong patient population
+# ---------------------------------------------------------
+
+population_sources = [
+    {
+        "title": "Example FDA approval announcement",
+        "url": "https://example.com/adult-approval",
+        "snippet": "Drug ABC approved for adults.",
+        "full_content": (
+            "The FDA approved Drug ABC for adults "
+            "with advanced cancer. The approval "
+            "does not include pediatric patients."
+        ),
+    }
+]
+
+population_claim = (
+    "The FDA approved Drug ABC for treating both "
+    "adults and children with advanced cancer. [SOURCE 1]"
+)
+
+population_supported, population_reason = verify_claim_support(
+    population_claim,
+    population_sources,
+)
+
+print("\n" + "=" * 60)
+print("WRONG PATIENT POPULATION TEST")
+print("=" * 60)
+print("Supported:", population_supported)
+print("Reason:", population_reason)
+print("=" * 60)
+
+if population_supported is False:
+    print("TEST PASSED: Incorrect patient population was rejected.")
+else:
+    print("TEST FAILED: Incorrect patient population was accepted.")
+
+# ---------------------------------------------------------
+# TEST 12: Incorrect dosage
+# ---------------------------------------------------------
+
+dosage_sources = [
+    {
+        "title": "Example medication information",
+        "url": "https://example.com/dosage",
+        "snippet": "Example dosage information.",
+        "full_content": (
+            "The example medication is administered "
+            "at a dosage of 100 mg once daily."
+        ),
+    }
+]
+
+dosage_claim = (
+    "The example medication is administered "
+    "at a dosage of 500 mg once daily. [SOURCE 1]"
+)
+
+dosage_supported, dosage_reason = verify_claim_support(
+    dosage_claim,
+    dosage_sources,
+)
+
+print("\n" + "=" * 60)
+print("INCORRECT DOSAGE VERIFICATION TEST")
+print("=" * 60)
+print("Supported:", dosage_supported)
+print("Reason:", dosage_reason)
+print("=" * 60)
+
+if dosage_supported is False:
+    print("TEST PASSED: Incorrect dosage was rejected.")
+else:
+    print("TEST FAILED: Incorrect dosage was accepted.")
+
+# ---------------------------------------------------------
+# TEST 13: Incorrect approval date
+# ---------------------------------------------------------
+
+date_sources = [
+    {
+        "title": "Example FDA approval announcement",
+        "url": "https://example.com/approval-date",
+        "snippet": "Drug ABC was approved in 2024.",
+        "full_content": (
+            "The FDA approved Drug ABC for the specified "
+            "indication on March 15, 2024."
+        ),
+    }
+]
+
+date_claim = (
+    "The FDA approved Drug ABC for the specified "
+    "indication on March 15, 2026. [SOURCE 1]"
+)
+
+date_supported, date_reason = verify_claim_support(
+    date_claim,
+    date_sources,
+)
+
+print("\n" + "=" * 60)
+print("INCORRECT APPROVAL DATE TEST")
+print("=" * 60)
+print("Supported:", date_supported)
+print("Reason:", date_reason)
+print("=" * 60)
+
+if date_supported is False:
+    print("TEST PASSED: Incorrect approval date was rejected.")
+else:
+    print("TEST FAILED: Incorrect approval date was accepted.")
+
+# ---------------------------------------------------------
+# TEST 14: Incorrect drug combination
+# ---------------------------------------------------------
+combination_sources = [
+    {
+        "title": "Example FDA approval announcement",
+        "url": "https://example.com/combination",
+        "snippet": "Drug ABC approved with Drug DEF.",
+        "full_content": (
+            "The FDA granted approval for Drug ABC "
+            "in combination with Drug DEF for adults "
+            "with advanced cancer."
+        ),
+    }
+]
+
+combination_claim = (
+    "The FDA approved Drug ABC in combination "
+    "with Drug XYZ for adults with advanced cancer. [SOURCE 1]"
+)
+
+combination_supported, combination_reason = verify_claim_support(
+    combination_claim,
+    combination_sources,
+)
+
+print("\n" + "=" * 60)
+print("INCORRECT DRUG COMBINATION TEST")
+print("=" * 60)
+print("Supported:", combination_supported)
+print("Reason:", combination_reason)
+print("=" * 60)
+
+if combination_supported is False:
+    print("TEST PASSED: Incorrect drug combination was rejected.")
+else:
+    print("TEST FAILED: Incorrect drug combination was accepted.")
+
+# ---------------------------------------------------------
+# TEST 15: Missing important treatment restriction
+# ---------------------------------------------------------
+restriction_sources = [
+    {
+        "title": "Example FDA approval announcement",
+        "url": "https://example.com/restriction",
+        "snippet": "Drug ABC approved for a specific patient group.",
+        "full_content": (
+            "The FDA approved Drug ABC for adults with "
+            "advanced cancer whose disease progressed "
+            "following previous immunotherapy treatment. "
+            "The approval is limited to this patient population."
+        ),
+    }
+]
+
+restriction_claim = (
+    "The FDA approved Drug ABC for all adults "
+    "with advanced cancer. [SOURCE 1]"
+)
+
+restriction_supported, restriction_reason = verify_claim_support(
+    restriction_claim,
+    restriction_sources,
+)
+
+print("\n" + "=" * 60)
+print("MISSING TREATMENT RESTRICTION TEST")
+print("=" * 60)
+print("Supported:", restriction_supported)
+print("Reason:", restriction_reason)
+print("=" * 60)
+
+if restriction_supported is False:
+    print("TEST PASSED: Missing treatment restriction was rejected.")
+else:
+    print("TEST FAILED: Missing treatment restriction was accepted.")

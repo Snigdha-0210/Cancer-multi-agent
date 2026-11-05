@@ -112,47 +112,47 @@ flowchart TD
     classDef outStyle fill:#022c22,stroke:#059669,stroke-width:2px,color:#ecfdf5
     classDef localModel fill:#181825,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4
 
-    Start([🟢 User Inquiry]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
+    Start(["🟢 User Inquiry"]):::inputStyle --> Router["🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>"]:::triageStyle
     
     %% Deterministic Emergency Branch (Direct bypass to Final)
-    Router -->|Intent: Crisis / Emergency / Self-Harm| EmergencyNode[🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>]:::emergStyle
-    EmergencyNode -->|Bypass verification directly| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code><br><em>verification_status: NOT_APPLICABLE</em>]:::finalStyle
+    Router -->|"Intent: Crisis / Emergency / Self-Harm"| EmergencyNode["🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>"]:::emergStyle
+    EmergencyNode -->|"Bypass verification directly"| FinalNode["📋 Final Response Node<br><code>backend/graph/final_node.py</code><br><em>verification_status: NOT_APPLICABLE</em>"]:::finalStyle
 
     %% RAG & Research Branches
-    Router -->|Intent: Faculty Knowledge| RAGNode[📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>]:::ragStyle
+    Router -->|"Intent: Faculty Knowledge"| RAGNode["📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>"]:::ragStyle
     subgraph RAG_Layer ["💾 Local RAG Knowledge Engine (103 Docs | 31,498 Units)"]
-        RAGNode <--> EmbedModel[🧠 MiniLM-L6-v2 Embeddings]:::ragStyle
-        EmbedModel <--> QdrantDB[(💾 Qdrant Local Vector DB / NumPy<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
+        RAGNode <--> EmbedModel["🧠 MiniLM-L6-v2 Embeddings"]:::ragStyle
+        EmbedModel <--> QdrantDB[("💾 Qdrant Local Vector DB / NumPy<br><code>cancer_faculty_knowledge</code>")]:::ragStyle
     end
 
-    Router -->|Intent: Emerging / 2026 Advances| ResearchNode[🌐 External Research Node<br><code>backend/graph/research_node.py</code>]:::resStyle
+    Router -->|"Intent: Emerging / 2026 Advances"| ResearchNode["🌐 External Research Node<br><code>backend/graph/research_node.py</code>"]:::resStyle
     
     subgraph Research_Engine ["🔎 External Evidence Engine (Zero API Cost)"]
-        ResearchNode <--> DDGSearch[🦆 DuckDuckGo Search Tool<br><code>backend/tools/web_search.py</code><br><em>site:fda.gov • site:cancer.gov • site:nih.gov</em>]:::resStyle
-        ResearchNode <--> RecencyGuard[🛡️ Deterministic Recency Safeguard<br><em>CURRENT ➔ POSSIBLY_CURRENT</em>]:::resStyle
+        ResearchNode <--> DDGSearch["🦆 DuckDuckGo Search Tool<br><code>backend/tools/web_search.py</code><br><em>site:fda.gov • site:cancer.gov • site:nih.gov</em>"]:::resStyle
+        ResearchNode <--> RecencyGuard["🛡️ Deterministic Recency Safeguard<br><em>CURRENT to POSSIBLY_CURRENT</em>"]:::resStyle
     end
 
     subgraph LLM_Runtime ["🤖 Local Ollama Inference Runtime"]
-        OllamaLocal[🦙 Local Ollama <code>llama3.2:3b</code><br><em>100% Private, Offline, Zero-Cost</em>]:::localModel
+        OllamaLocal["🦙 Local Ollama <code>llama3.2:3b</code><br><em>100% Private, Offline, Zero-Cost</em>"]:::localModel
     end
 
     ResearchNode -.-> LLM_Runtime
     SynthesisNode -.-> LLM_Runtime
     VerifierNode -.-> LLM_Runtime
 
-    Router -->|Intent: Faculty & Research| RAGNode
-    RAGNode -->|Conditional: If Recent Updates Needed| ResearchNode
-    RAGNode -->|Standard Clinical Evidence| SynthesisNode[⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>]:::synthStyle
+    Router -->|"Intent: Faculty & Research"| RAGNode
+    RAGNode -->|"Conditional: If Recent Updates Needed"| ResearchNode
+    RAGNode -->|"Standard Clinical Evidence"| SynthesisNode["⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>"]:::synthStyle
     ResearchNode --> SynthesisNode
     
     %% Synthesis & Verification Loop
-    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code><br><em>5-Tier Robust Verdict Extraction</em>]:::verifStyle
+    SynthesisNode --> VerifierNode["🔍 Verification Node<br><code>backend/graph/verification_node.py</code><br><em>5-Tier Robust Verdict Extraction</em>"]:::verifStyle
 
-    VerifierNode -->|Verdict: PASS| FinalNode
-    VerifierNode -.->|Verdict: FAIL &amp; Attempts &lt; 2 &amp; needs_research| ResearchNode
-    VerifierNode -->|Attempts &ge; 2 or Non-Research Fallback| FinalNode
+    VerifierNode -->|"Verdict: PASS"| FinalNode
+    VerifierNode -.->|"Verdict: FAIL & Attempts < 2 & needs_research"| ResearchNode
+    VerifierNode -->|"Attempts >= 2 or Non-Research Fallback"| FinalNode
 
-    FinalNode --> End([🏁 Verified Response + Sources + Audit Trace]):::outStyle
+    FinalNode --> End(["🏁 Verified Response + Sources + Audit Trace"]):::outStyle
 ```
 
 ---
@@ -168,20 +168,20 @@ flowchart TD
     classDef logic fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc
     classDef route fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc
 
-    Q([👤 User Question]):::route --> EmergencyCheck{🚨 Deterministic Emergency Check<br><em>Self-Harm / Crisis / Acute Medical</em>}:::logic
+    Q(["👤 User Question"]):::route --> EmergencyCheck{"🚨 Deterministic Emergency Check<br><em>Self-Harm / Crisis / Acute Medical</em>"}:::logic
     
-    EmergencyCheck -->|Pattern Detected| EmergencyPath[🚨 Emergency Route<br><code>emergency: True</code><br><code>faculty_rag: False</code><br><code>current_research: False</code>]:::danger
-    EmergencyPath --> DirectFinal[📋 Direct Bypass to Final Node<br><em>No Synthesis • No Verifier</em>]:::danger
+    EmergencyCheck -->|"Pattern Detected"| EmergencyPath["🚨 Emergency Route<br><code>emergency: True</code><br><code>faculty_rag: False</code><br><code>current_research: False</code>"]:::danger
+    EmergencyPath --> DirectFinal["📋 Direct Bypass to Final Node<br><em>No Synthesis • No Verifier</em>"]:::danger
 
-    EmergencyCheck -->|Safe| OllamaCall[🤖 Local LLM Intent Classifier<br><em>Ollama llama3.2:3b (format: json)</em>]:::logic
+    EmergencyCheck -->|"Safe"| OllamaCall["🤖 Local LLM Intent Classifier<br><em>Ollama llama3.2:3b (format: json)</em>"]:::logic
 
-    OllamaCall --> PostRules[⚙️ Deterministic Post-Processing Pipeline<br><code>decision.synthesis = True</code><br><code>decision.verification = True</code>]:::logic
+    OllamaCall --> PostRules["⚙️ Deterministic Post-Processing Pipeline<br><code>decision.synthesis = True</code><br><code>decision.verification = True</code>"]:::logic
 
-    PostRules --> TemporalCheck{Temporal Keywords?<br><em>latest, current, 2026, fda-approved...</em>}:::logic
+    PostRules --> TemporalCheck{"Temporal Keywords?<br><em>latest, current, 2026, fda-approved...</em>"}:::logic
 
-    TemporalCheck -->|Faculty Material + Current| DualRoute[📚 Faculty RAG + 🌐 Current Research<br><em>Dual Historical & Contemporary Grounding</em>]:::safe
-    TemporalCheck -->|Temporal Query Only| ResearchRoute[📚 Faculty RAG + 🌐 Current Research<br><em>Standard Base + Latest Web Findings</em>]:::safe
-    TemporalCheck -->|Standard Clinical Query| FacultyOnly[📚 Faculty RAG Only<br><code>faculty_rag: True, current_research: False</code><br><em>Guaranteed Knowledge Base Grounding</em>]:::safe
+    TemporalCheck -->|"Faculty Material + Current"| DualRoute["📚 Faculty RAG + 🌐 Current Research<br><em>Dual Historical & Contemporary Grounding</em>"]:::safe
+    TemporalCheck -->|"Temporal Query Only"| ResearchRoute["📚 Faculty RAG + 🌐 Current Research<br><em>Standard Base + Latest Web Findings</em>"]:::safe
+    TemporalCheck -->|"Standard Clinical Query"| FacultyOnly["📚 Faculty RAG Only<br><code>faculty_rag: True, current_research: False</code><br><em>Guaranteed Knowledge Base Grounding</em>"]:::safe
 ```
 
 ---
@@ -212,18 +212,18 @@ sequenceDiagram
         Router->>Research: Query with authoritative domain filters
         Research->>Tool: search_web("melanoma site:fda.gov", max_results=5)
         Tool-->>Research: FDA accelerated approval snippets (Tudriqev 2026)
-        Note over Research: Apply Rules 15-16 & Deterministic Safeguard:<br/>Downgrade CURRENT ➔ POSSIBLY_CURRENT
+        Note over Research: Apply Rules 15-16 and Deterministic Safeguard:<br/>Downgrade CURRENT to POSSIBLY_CURRENT
         Research-->>Synth: Structured Evidence (claims + URLs + recency caveats)
     end
 
     Synth->>Synth: Synthesize response explicitly differentiating 2018 baseline from 2026 therapies
     Synth->>Verifier: Submit proposed draft + raw retrieved evidence
-    Note over Verifier: Audit claims against evidence; extract verdict via 5-tier resilient parser
+    Note over Verifier: Audit claims against evidence, and extract verdict via 5-tier resilient parser
 
     alt Verification PASS
         Verifier->>Final: Verdict PASS (Confidence: HIGH)
         Final-->>User: Verified Response + Verification Badge + Page Citations
-    else Verification FAIL (Attempts < 2 & needs_research)
+    else Verification FAIL (Attempts under 2 and needs_research)
         Verifier->>Research: Flag unsupported claim & request targeted evidence
         Research->>Tool: Targeted query with secondary sources
         Tool-->>Research: Refined clinical trial evidence
@@ -249,7 +249,7 @@ sequenceDiagram
     Router->>Emergency: Route directly to Emergency Node
     Note over Emergency: Generate safe de-escalation response<br/>(100% deterministic, offline-capable, zero latency)
     Emergency->>Final: Bypass synthesis & verification directly
-    Note over Final: Sets verification_status = "NOT_APPLICABLE"<br/>Preserves crisis resources without alteration
+    Note over Final: Sets verification_status = NOT_APPLICABLE<br/>Preserves crisis resources without alteration
     Final-->>User: Empathetic de-escalation + 988 Lifeline + Emergency services guidance
 ```
 
@@ -321,32 +321,32 @@ flowchart TD
     classDef unitStyle fill:#11111b,stroke:#a6e3a1,stroke-width:2px,color:#cdd6f4
     classDef dbStyle fill:#313244,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4
 
-    Z1[📦 Cancer_Type.zip<br><em>74 Patient Guidelines</em>]:::rawStyle --> Extractor[📂 Source Extractor<br><code>backend/rag/extract_sources.py</code>]:::stageStyle
-    Z2[📦 pdfs.zip<br><em>29 Oncology Textbooks</em>]:::rawStyle --> Extractor
+    Z1["📦 Cancer_Type.zip<br><em>74 Patient Guidelines</em>"]:::rawStyle --> Extractor["📂 Source Extractor<br><code>backend/rag/extract_sources.py</code>"]:::stageStyle
+    Z2["📦 pdfs.zip<br><em>29 Oncology Textbooks</em>"]:::rawStyle --> Extractor
 
-    Extractor --> DocDirs[📁 <code>data/source_documents/</code><br><em>103 Clean PDF Files</em>]:::rawStyle
+    Extractor --> DocDirs["📁 <code>data/source_documents/</code><br><em>103 Clean PDF Files</em>"]:::rawStyle
 
-    DocDirs --> Auditor[🔍 PDF Auditor<br><code>backend/rag/pdf_audit.py</code>]:::stageStyle
-    Auditor --> AuditReport[📄 <code>pdf_audit.json</code><br><em>17,830 Pages | 100% Pass</em>]:::stageStyle
+    DocDirs --> Auditor["🔍 PDF Auditor<br><code>backend/rag/pdf_audit.py</code>"]:::stageStyle
+    Auditor --> AuditReport["📄 <code>pdf_audit.json</code><br><em>17,830 Pages | 100% Pass</em>"]:::stageStyle
 
-    DocDirs --> DocMapper[🗺️ Document Map Builder<br><code>backend/rag/build_document_map.py</code>]:::stageStyle
-    DocMapper --> DocMapJson[📄 <code>document_map.json</code><br><em>Page text + Chapter/Section metadata</em>]:::stageStyle
+    DocDirs --> DocMapper["🗺️ Document Map Builder<br><code>backend/rag/build_document_map.py</code>"]:::stageStyle
+    DocMapper --> DocMapJson["📄 <code>document_map.json</code><br><em>Page text + Chapter/Section metadata</em>"]:::stageStyle
 
-    DocMapJson --> KUBuilder[🧩 Knowledge Unit Builder<br><code>backend/rag/knowledge_units.py</code>]:::stageStyle
+    DocMapJson --> KUBuilder["🧩 Knowledge Unit Builder<br><code>backend/rag/knowledge_units.py</code>"]:::stageStyle
     
     subgraph KUDetails ["📏 Section-Aware Semantic Splitting"]
-        KUBuilder --> KU1[Paragraph Extraction & Whitespace Normalization]
-        KUBuilder --> KU2[Abbreviation Safe Splitting <em>e.g., Dr., Fig., vs.</em>]
-        KUBuilder --> KU3[Bounded Windows: Target 1800 | Max 2600 | Min 800 chars]
-        KUBuilder --> KU4[Deterministic ID Generation: <code>{doc}-p{start}-p{end}-u{idx}</code>]
+        KUBuilder --> KU1["Paragraph Extraction & Whitespace Normalization"]
+        KUBuilder --> KU2["Abbreviation Safe Splitting (e.g., Dr., Fig., vs.)"]
+        KUBuilder --> KU3["Bounded Windows: Target 1800 | Max 2600 | Min 800 chars"]
+        KUBuilder --> KU4["Deterministic ID Generation: doc-start-end-idx"]
     end
 
-    KUBuilder --> KUOutput[📄 <code>knowledge_units.json</code><br><em>31,498 High-Fidelity Units</em>]:::unitStyle
+    KUBuilder --> KUOutput["📄 <code>knowledge_units.json</code><br><em>31,498 High-Fidelity Units</em>"]:::unitStyle
 
-    KUOutput --> Inspector[🔬 Quality Inspector<br><code>backend/rag/chunk_inspector.py</code>]:::stageStyle
+    KUOutput --> Inspector["🔬 Quality Inspector<br><code>backend/rag/chunk_inspector.py</code>"]:::stageStyle
 
-    KUOutput --> Embedder[🧠 Dense Vector Embedder<br><code>backend/rag/embed_chunks.py</code>]:::dbStyle
-    Embedder --> VectorDB[(💾 Qdrant Vector Database<br><code>cancer_faculty_knowledge</code><br><em>384-dim Cosine Index</em>)]:::dbStyle
+    KUOutput --> Embedder["🧠 Dense Vector Embedder<br><code>backend/rag/embed_chunks.py</code>"]:::dbStyle
+    Embedder --> VectorDB[("💾 Qdrant Vector Database<br><code>cancer_faculty_knowledge</code><br><em>384-dim Cosine Index</em>")]:::dbStyle
 ```
 
 ---
@@ -434,22 +434,22 @@ flowchart TD
     classDef warnStyle fill:#451a03,stroke:#f59e0b,stroke-width:2px,color:#fef3c7
     classDef failStyle fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fef2f2
 
-    Synth[⚖️ Synthesis Proposed Answer + Raw Evidence Payload]:::inputStyle --> VerifierAgent[🔍 Verifier Agent<br><em>Ollama llama3.2:3b</em><br><code>format: json</code>, <code>temperature: 0</code>]:::verifStyle
+    Synth["⚖️ Synthesis Proposed Answer + Raw Evidence Payload"]:::inputStyle --> VerifierAgent["🔍 Verifier Agent<br><em>Ollama llama3.2:3b</em><br><code>format: json</code>, <code>temperature: 0</code>"]:::verifStyle
 
-    VerifierAgent --> RawJSON{Parse Valid JSON?}:::verifStyle
+    VerifierAgent --> RawJSON{"Parse Valid JSON?"}:::verifStyle
     
-    RawJSON -->|JSONDecodeError / Non-Dict| UnknownFail[⚠️ UNKNOWN Verdict<br><em>Fail-Closed Triggered</em>]:::warnStyle
-    RawJSON -->|Valid Dict| VerdictField{Check <code>verdict</code> field}:::verifStyle
+    RawJSON -->|"JSONDecodeError / Non-Dict"| UnknownFail["⚠️ UNKNOWN Verdict<br><em>Fail-Closed Triggered</em>"]:::warnStyle
+    RawJSON -->|"Valid Dict"| VerdictField{"Check verdict field"}:::verifStyle
 
-    VerdictField -->|<code>verdict == "PASS"</code>| PassNode[✅ VERIFIED PASS<br><em>High Confidence</em>]:::safeStyle
-    VerdictField -->|<code>verdict == "FAIL"</code>| FailNode[❌ VERIFIED FAIL<br><em>Unsupported Claim Flagged</em>]:::failStyle
-    VerdictField -->|Missing / Other| UnknownFail
+    VerdictField -->|"verdict == PASS"| PassNode["✅ VERIFIED PASS<br><em>High Confidence</em>"]:::safeStyle
+    VerdictField -->|"verdict == FAIL"| FailNode["❌ VERIFIED FAIL<br><em>Unsupported Claim Flagged</em>"]:::failStyle
+    VerdictField -->|"Missing / Other"| UnknownFail
 
-    PassNode --> FinalApproved[📋 Final Response Node<br><em>Deliver Verified Answer + Badge</em>]:::safeStyle
+    PassNode --> FinalApproved["📋 Final Response Node<br><em>Deliver Verified Answer + Badge</em>"]:::safeStyle
 
-    FailNode --> LoopGate{attempts < 2 AND<br><code>current_research == True</code>?}:::verifStyle
-    LoopGate -->|Yes| ResearchLoop[🌐 Loop back to Research Node<br><em>Targeted Secondary Retrieval</em>]:::warnStyle
-    LoopGate -->|No| SafeDisclaimer[📋 Final Response Node<br><em>Safe Clinical Disclaimer: Verification Incomplete</em>]:::warnStyle
+    FailNode --> LoopGate{"attempts < 2 AND<br><code>current_research == True</code>?"}:::verifStyle
+    LoopGate -->|"Yes"| ResearchLoop["🌐 Loop back to Research Node<br><em>Targeted Secondary Retrieval</em>"]:::warnStyle
+    LoopGate -->|"No"| SafeDisclaimer["📋 Final Response Node<br><em>Safe Clinical Disclaimer: Verification Incomplete</em>"]:::warnStyle
 
     UnknownFail --> SafeDisclaimer
 ```

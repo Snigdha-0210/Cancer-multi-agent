@@ -19,34 +19,34 @@ flowchart TD
     classDef finalStyle fill:#065f46,stroke:#34d399,stroke-width:2px,color:#ecfdf5
     classDef outStyle fill:#022c22,stroke:#059669,stroke-width:2px,color:#ecfdf5
 
-    Start([🟢 User Inquiry]):::inputStyle --> Router[🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>]:::triageStyle
+    Start(["🟢 User Inquiry"]):::inputStyle --> Router["🧭 Router & Triage Node<br><code>backend/graph/router_node.py</code>"]:::triageStyle
     
     %% Emergency Branch
-    Router -->|Intent: Crisis / Emergency / Self-Harm| EmergencyNode[🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>]:::emergStyle
-    EmergencyNode --> SynthesisNode[⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>]:::synthStyle
+    Router -->|"Intent: Crisis / Emergency / Self-Harm"| EmergencyNode["🚨 Emergency Safety Node<br><code>backend/graph/emergency_node.py</code>"]:::emergStyle
+    EmergencyNode --> SynthesisNode["⚖️ Synthesis Node<br><code>backend/graph/synthesis_node.py</code>"]:::synthStyle
 
     %% RAG & Research Branches
-    Router -->|Intent: Faculty Knowledge| RAGNode[📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>]:::ragStyle
+    Router -->|"Intent: Faculty Knowledge"| RAGNode["📚 Faculty RAG Node<br><code>backend/graph/rag_node.py</code>"]:::ragStyle
     subgraph RAG_Layer ["💾 Local RAG Knowledge Engine (103 Docs | 31,498 Units)"]
-        RAGNode <--> EmbedModel[🧠 MiniLM-L6-v2 Embeddings]:::ragStyle
-        EmbedModel <--> QdrantDB[(💾 Qdrant Local Vector DB<br><code>cancer_faculty_knowledge</code>)]:::ragStyle
+        RAGNode <--> EmbedModel["🧠 MiniLM-L6-v2 Embeddings"]:::ragStyle
+        EmbedModel <--> QdrantDB[("💾 Qdrant Local Vector DB<br><code>cancer_faculty_knowledge</code>")]:::ragStyle
     end
 
-    Router -->|Intent: Emerging / 2026 Advances| ResearchNode[🌐 External Research Node<br><code>backend/graph/research_node.py</code>]:::resStyle
-    ResearchNode <--> WebSources[🔎 Authoritative Health Data<br><em>FDA, NCI, NIH, CDC, PubMed</em>]:::resStyle
+    Router -->|"Intent: Emerging / 2026 Advances"| ResearchNode["🌐 External Research Node<br><code>backend/graph/research_node.py</code>"]:::resStyle
+    ResearchNode <--> WebSources["🔎 Authoritative Health Data<br><em>FDA, NCI, NIH, CDC, PubMed</em>"]:::resStyle
 
-    RAGNode -->|Conditional: If Recent Updates Required| ResearchNode
-    RAGNode -->|Otherwise| SynthesisNode
+    RAGNode -->|"Conditional: If Recent Updates Required"| ResearchNode
+    RAGNode -->|"Otherwise"| SynthesisNode
     ResearchNode --> SynthesisNode
     
     %% Synthesis & Verification Loop
-    SynthesisNode --> VerifierNode[🔍 Verification Node<br><code>backend/graph/verification_node.py</code>]:::verifStyle
+    SynthesisNode --> VerifierNode["🔍 Verification Node<br><code>backend/graph/verification_node.py</code>"]:::verifStyle
 
-    VerifierNode -->|Verdict: PASS| FinalNode[📋 Final Response Node<br><code>backend/graph/final_node.py</code>]:::finalStyle
-    VerifierNode -.->|Verdict: FAIL &amp; Attempts &lt; 2| ResearchNode
-    VerifierNode -->|Attempts &ge; 2 Fallback| FinalNode
+    VerifierNode -->|"Verdict: PASS"| FinalNode["📋 Final Response Node<br><code>backend/graph/final_node.py</code>"]:::finalStyle
+    VerifierNode -.->|"Verdict: FAIL & Attempts < 2"| ResearchNode
+    VerifierNode -->|"Attempts >= 2 Fallback"| FinalNode
 
-    FinalNode --> End([🏁 Verified Response + Sources + Audit Trace]):::outStyle
+    FinalNode --> End(["🏁 Verified Response + Sources + Audit Trace"]):::outStyle
 ```
 
 ---
@@ -69,13 +69,13 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    PDFs[103 Raw PDFs<br><em>74 Guidelines + 29 Books</em>] --> Extractor[extract_sources.py]
-    Extractor --> Auditor[pdf_audit.py<br><em>17,830 Pages</em>]
-    Auditor --> DocMap[build_document_map.py]
-    DocMap --> KU[knowledge_units.py<br><em>31,498 Units</em>]
-    KU --> Inspector[chunk_inspector.py]
-    KU --> Embedder[embed_chunks.py<br><em>all-MiniLM-L6-v2</em>]
-    Embedder --> Qdrant[(Qdrant Vector DB)]
+    PDFs["103 Raw PDFs<br><em>74 Guidelines + 29 Books</em>"] --> Extractor["extract_sources.py"]
+    Extractor --> Auditor["pdf_audit.py<br><em>17,830 Pages</em>"]
+    Auditor --> DocMap["build_document_map.py"]
+    DocMap --> KU["knowledge_units.py<br><em>31,498 Units</em>"]
+    KU --> Inspector["chunk_inspector.py"]
+    KU --> Embedder["embed_chunks.py<br><em>all-MiniLM-L6-v2</em>"]
+    Embedder --> Qdrant[("Qdrant Vector DB")]
 ```
 
 - **Extraction**: Partitions input into clean directory hierarchies (`patient_guidelines`, `oncology_references`).

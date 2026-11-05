@@ -43,12 +43,14 @@ Automated script that extracts all PMIDs and NCT identifiers from agent outputs 
 
 ```mermaid
 flowchart LR
-    CaseSuite[Benchmark Patient Cases] --> AgentSystem[Cancer Multi-Agent System]
-    AgentSystem --> OutputReport[Generated Case Reports]
-    OutputReport --> Eval1[Citation Verifier: NCBI API]
-    OutputReport --> Eval2[Guideline LLM Judge: NCCN Rubric]
-    OutputReport --> Eval3[Safety & Toxicity Checker]
-    Eval1 & Eval2 & Eval3 --> ScoreCard[Evaluation Scorecard & Report]
+    CaseSuite["Benchmark Patient Cases"] --> AgentSystem["Cancer Multi-Agent System"]
+    AgentSystem --> OutputReport["Generated Case Reports"]
+    OutputReport --> Eval1["Citation Verifier: NCBI API"]
+    OutputReport --> Eval2["Guideline LLM Judge: NCCN Rubric"]
+    OutputReport --> Eval3["Safety & Toxicity Checker"]
+    Eval1 --> ScoreCard["Evaluation Scorecard & Report"]
+    Eval2 --> ScoreCard
+    Eval3 --> ScoreCard
 ```
 
 ---

@@ -1,5 +1,7 @@
 import json
+import re
 import urllib.request
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -160,6 +162,136 @@ def ask_ollama(
     return result.get("response", "")
 
 
+def identify_source_organization(url: str) -> str:
+    """
+    Identify the organization responsible for a source
+    using its website domain.
+    """
+    try:
+        hostname = urlparse(url).hostname
+        if not hostname:
+            return "Unknown organization"
+        hostname = hostname.lower()
+        organizations = {
+            "fda.gov": "U.S. Food and Drug Administration (FDA)",
+            "cancer.gov": "National Cancer Institute (NCI)",
+            "nih.gov": "National Institutes of Health (NIH)",
+            "cdc.gov": "Centers for Disease Control and Prevention (CDC)",
+            "who.int": "World Health Organization (WHO)",
+            "cancer.org": "American Cancer Society (ACS)",
+        }
+        for domain, organization in organizations.items():
+            if hostname == domain or hostname.endswith("." + domain):
+                return organization
+        # Use the hostname when it does not match a known organization.
+        return hostname
+    except Exception:
+        return "Unknown organization"
+
+
+def extract_source_dates(content: str) -> tuple[str, str]:
+    """
+    Extract publication and modification dates from HTML metadata
+    and JSON-LD structured data.
+    Returns:
+        (publication_date, updated_date)
+    Missing or invalid metadata returns empty strings.
+    """
+    if not isinstance(content, str) or not content.strip():
+        return "", ""
+
+    publication_date = ""
+    updated_date = ""
+
+    # ---------------------------------------------------------
+    # 1. Search HTML meta tags
+    # ---------------------------------------------------------
+    meta_patterns = {
+        "publication": [
+            "article:published_time",
+            "datePublished",
+            "datepublished",
+            "publishdate",
+            "dc.date",
+            "dcterms.created",
+        ],
+        "updated": [
+            "article:modified_time",
+            "dateModified",
+            "datemodified",
+            "last-modified",
+            "modified",
+            "dcterms.modified",
+        ],
+    }
+
+    for name in meta_patterns["publication"]:
+        pattern = (
+            rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)'
+            rf'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\']'
+        )
+        match = re.search(pattern, content, flags=re.IGNORECASE)
+        if match:
+            val = (match.group(1) or match.group(2) or "").strip()
+            if val:
+                publication_date = val
+                break
+
+    for name in meta_patterns["updated"]:
+        pattern = (
+            rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)'
+            rf'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\']'
+        )
+        match = re.search(pattern, content, flags=re.IGNORECASE)
+        if match:
+            val = (match.group(1) or match.group(2) or "").strip()
+            if val:
+                updated_date = val
+                break
+
+    # ---------------------------------------------------------
+    # 2. Search JSON-LD structured data
+    # ---------------------------------------------------------
+    if not publication_date or not updated_date:
+        json_ld_blocks = re.findall(
+            r'<script\s+[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            content,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        for block in json_ld_blocks:
+            try:
+                data = json.loads(block.strip())
+            except Exception:
+                continue
+
+            items = []
+            if isinstance(data, dict):
+                if "@graph" in data and isinstance(data["@graph"], list):
+                    items.extend(data["@graph"])
+                items.append(data)
+            elif isinstance(data, list):
+                items.extend(data)
+
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if not publication_date:
+                    pub = item.get("datePublished") or item.get("dateCreated")
+                    if isinstance(pub, str) and pub.strip():
+                        publication_date = pub.strip()
+                if not updated_date:
+                    upd = item.get("dateModified")
+                    if isinstance(upd, str) and upd.strip():
+                        updated_date = upd.strip()
+                if publication_date and updated_date:
+                    break
+
+            if publication_date and updated_date:
+                break
+
+    return publication_date, updated_date
+
+
 def extract_webpage_with_retry(url: str, attempts: int = 3):
     """
     Retry webpage extraction when temporary network errors occur.
@@ -211,19 +343,30 @@ def verify_claim_support(claim: str, sources: list) -> tuple[bool, str]:
         if source_number < 1 or source_number > len(sources):
             return False, f"Invalid source reference: {source_number}"
         source = sources[source_number - 1]
+        if not isinstance(source, dict):
+            return False, f"Invalid source format for reference: {source_number}"
+
         content = (
             source.get("full_content", "")
             or source.get("snippet", "")
             or ""
         )
+        if not isinstance(content, str) or not content.strip():
+            return False, f"Cited source {source_number} contains no evidence."
+
         evidence_parts.append(
             f"SOURCE {source_number}:\n"
             f"Title: {source.get('title', '')}\n"
             f"URL: {source.get('url', '')}\n"
-            f"Content:\n{content[:4000]}"
+            f"Content:\n{content.strip()[:4000]}"
         )
 
+    if not evidence_parts:
+        return False, "No cited source evidence available for verification."
+
     verification_evidence = "\n\n".join(evidence_parts)
+    if not verification_evidence.strip():
+        return False, "Cited source evidence is empty."
 
     verification_prompt = f"""Claim to verify:
 {claim}
@@ -252,9 +395,18 @@ Respond in JSON format with:
             system_prompt=verification_system,
         )
         parsed = json.loads(raw_response)
-        supported = parsed.get("supported") is True
-        reason = parsed.get("reason", "No reason provided.")
-        return supported, reason
+        if not isinstance(parsed, dict):
+            return False, "Verifier returned an invalid JSON structure."
+
+        supported = parsed.get("supported")
+        if not isinstance(supported, bool):
+            return False, "Verifier did not return a valid Boolean result."
+
+        reason = parsed.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            return False, "Verifier returned no valid explanation."
+
+        return supported, reason.strip()
     except Exception as error:
         return False, f"Verification failed: {error}"
 
@@ -882,10 +1034,16 @@ Python will attach the original supplied sources separately.
             sources=[
                 ResearchSource(
                     title=source.get("title", ""),
-                    organization="FDA / Government / Medical source",
+                    organization=identify_source_organization(
+                        source.get("url", "")
+                    ),
                     url=source.get("url", ""),
-                    publication_date="",
-                    updated_date="",
+                    publication_date=extract_source_dates(
+                        source.get("full_content", "")
+                    )[0],
+                    updated_date=extract_source_dates(
+                        source.get("full_content", "")
+                    )[1],
                     source_type="external web search",
                 )
                 for source in unique_results
@@ -962,6 +1120,22 @@ Python will attach the original supplied sources separately.
                 print("Reason:", reason)
 
         result.claims = evidence_verified_claims
+
+        # ---------------------------------------------------------
+        # Build summary ONLY from evidence-verified claims
+        # ---------------------------------------------------------
+        if result.claims:
+            verified_summary_parts = []
+            for claim in result.claims:
+                clean_claim = re.sub(
+                    r"\s*\[SOURCE\s+\d+\]",
+                    "",
+                    claim,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if clean_claim:
+                    verified_summary_parts.append(clean_claim)
+            result.summary = " ".join(verified_summary_parts)
 
         # ---------------------------------------------------------
         # Fail-safe: reject an unsupported research summary

@@ -1,4 +1,5 @@
 from ddgs import DDGS
+import requests
 
 
 def search_web(query: str, max_results: int = 5):
@@ -21,10 +22,17 @@ def search_web(query: str, max_results: int = 5):
     return results
 
 
+
 def extract_webpage(url: str):
     """
-    Extract readable text from a webpage using DDGS.
+    Extract readable webpage content using DDGS
+    and retrieve original HTML for metadata extraction.
     """
+    content = ""
+    html = ""
+    extracted_url = url
+
+    # Step 1: Extract readable content using DDGS
     try:
         with DDGS() as ddgs:
             page = ddgs.extract(url, fmt="text_markdown")
@@ -34,30 +42,37 @@ def extract_webpage(url: str):
         if isinstance(content, bytes):
             content = content.decode("utf-8", errors="replace")
 
-        return {
-            "url": page.get("url", url),
-            "content": content,
-            "success": bool(content.strip()),
-        }
+        extracted_url = page.get("url", url)
 
     except Exception as error:
-        print(f"Page extraction warning for {url}: {error}")
-        return {
-            "url": url,
-            "content": "",
-            "success": False,
-        }
+        print(f"DDGS extraction warning for {url}: {error}")
 
+    # Step 2: Retrieve original HTML for date metadata
+    try:
+        response = requests.get(
+            url,
+            timeout=20,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
+                )
+            },
+        )
 
-if __name__ == "__main__":
+        response.raise_for_status()
 
-    q = "latest FDA approved melanoma treatment 2026 site:fda.gov"
+        content_type = response.headers.get("Content-Type", "").lower()
 
-    data = search_web(q)
+        if "text/html" in content_type or "application/xhtml+xml" in content_type:
+            html = response.text
 
-    for i, item in enumerate(data, 1):
-        print("=" * 60)
-        print(i)
-        print(item["title"])
-        print(item["url"])
-        print(item["snippet"])
+    except requests.RequestException as error:
+        print(f"HTML retrieval warning for {url}: {error}")
+
+    return {
+        "url": extracted_url,
+        "content": content,
+        "html": html,
+        "success": bool(content.strip()),
+    }

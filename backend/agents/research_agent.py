@@ -567,8 +567,10 @@ def research_question(question: str) -> ResearchResult:
                                     "and cancer-related approval notifications."
                                 ),
                                 "full_content": content_slice,
+                                "html_content": notification_page.get("html", ""),
                             },
                         )
+                        
                         seen_urls.add(fda_notifications_url)
                         print(
                             "FDA consolidated oncology approval list "
@@ -651,7 +653,8 @@ def research_question(question: str) -> ResearchResult:
 
                 if extracted.get("success"):
                     page_content = extracted["content"]
-
+                    result["html_content"] = extracted.get("html", "")
+                    
                     if "oncology-cancerhematologic-malignancies-approval-notifications" in url:
                         # Keep the section surrounding the Tudriqev notification.
                         position = page_content.lower().find("vusolimogene")
@@ -671,6 +674,20 @@ def research_question(question: str) -> ResearchResult:
             except Exception as extraction_error:
                 print(f"Extraction warning: {extraction_error}")
                 result["full_content"] = ""
+
+        # ---------------------------------------------------------
+        # 3B. Extract publication and update dates for each source
+        # ---------------------------------------------------------
+        for result in unique_results:
+            metadata_content = (
+                result.get("html_content", "")
+                or result.get("full_content", "")
+            )
+            publication_date, updated_date = extract_source_dates(
+                metadata_content
+            )
+            result["publication_date"] = publication_date
+            result["updated_date"] = updated_date
 
         # ---------------------------------------------------------
         # 4. Prepare evidence using unique source IDs
@@ -1038,12 +1055,8 @@ Python will attach the original supplied sources separately.
                         source.get("url", "")
                     ),
                     url=source.get("url", ""),
-                    publication_date=extract_source_dates(
-                        source.get("full_content", "")
-                    )[0],
-                    updated_date=extract_source_dates(
-                        source.get("full_content", "")
-                    )[1],
+                    publication_date=source.get("publication_date", ""),
+                    updated_date=source.get("updated_date", ""),
                     source_type="external web search",
                 )
                 for source in unique_results

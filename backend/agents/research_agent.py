@@ -570,7 +570,12 @@ def research_question(question: str) -> ResearchResult:
                         notification_page.get("success")
                         or notification_page.get("html", "").strip()
                     ):
-                        page_content = notification_page["content"]
+                        page_content = notification_page.get("content", "").strip()
+                        if not page_content:
+                            print(
+                                "FDA notification page HTML was retrieved, "
+                                "but readable approval text was unavailable."
+                            )
                         # Extract FDA notification content relevant
                         # to the cancer type in the user's question.
                         disease_terms = {
@@ -611,28 +616,50 @@ def research_question(question: str) -> ResearchResult:
                         else:
                             content_slice = page_content[:8000]
 
-                        unique_results.insert(
-                            0,
-                            {
-                                "title": (
-                                    "FDA Oncology and Cancer/Hematologic "
-                                    "Malignancies Approval Notifications"
-                                ),
-                                "url": fda_notifications_url,
-                                "snippet": (
-                                    "FDA consolidated list of oncology "
-                                    "and cancer-related approval notifications."
-                                ),
-                                "full_content": content_slice,
-                                "html_content": notification_page.get("html", ""),
-                            },
-                        )
-                        
-                        seen_urls.add(fda_notifications_url)
-                        print(
-                            "FDA consolidated oncology approval list "
-                            "retrieved successfully."
-                        )
+                        if page_content:
+                            unique_results.insert(
+                                0,
+                                {
+                                    "title": (
+                                        "FDA Oncology and Cancer/Hematologic "
+                                        "Malignancies Approval Notifications"
+                                    ),
+                                    "url": fda_notifications_url,
+                                    "snippet": (
+                                        "FDA consolidated list of oncology "
+                                        "and cancer-related approval notifications."
+                                    ),
+                                    "full_content": content_slice,
+                                    "html_content": notification_page.get("html", ""),
+                                },
+                            )
+                            seen_urls.add(fda_notifications_url)
+                            print(
+                                "FDA consolidated oncology approval list "
+                                "retrieved successfully."
+                            )
+                        else:
+                            unique_results.insert(
+                                0,
+                                {
+                                    "title": (
+                                        "FDA Oncology Approval Notifications "
+                                        "(Metadata Only)"
+                                    ),
+                                    "url": fda_notifications_url,
+                                    "snippet": (
+                                        "FDA webpage retrieved for source-date metadata. "
+                                        "Readable approval evidence was unavailable."
+                                    ),
+                                    "full_content": "",
+                                    "html_content": notification_page.get("html", ""),
+                                },
+                            )
+                            seen_urls.add(fda_notifications_url)
+                            print(
+                                "FDA HTML preserved for date extraction. "
+                                "No readable approval evidence was added."
+                            )
                 except Exception as error:
                     print(
                         f"FDA consolidated list warning: {error}"
@@ -715,7 +742,10 @@ def research_question(question: str) -> ResearchResult:
                     page_content = extracted["content"]
                     result["html_content"] = extracted.get("html", "")
                     
-                    if "oncology-cancerhematologic-malignancies-approval-notifications" in url:
+                    if (
+                        "oncology-cancerhematologic-malignancies-approval-notifications" in url
+                        and page_content.strip()
+                    ):
                         # Keep the section surrounding the Tudriqev notification.
                         position = page_content.lower().find("vusolimogene")
                         if position >= 0:
@@ -759,8 +789,35 @@ def research_question(question: str) -> ResearchResult:
         for index, result in enumerate(unique_results, 1):
             source_id = f"SRC_A{index:02d}"
             source_id_to_number[source_id] = index
+            full_content = result.get("full_content", "").strip()
+            html_content = result.get("html_content", "").strip()
+
+            if not full_content and html_content:
+                evidence_status = (
+                    "METADATA ONLY - NOT VALID EVIDENCE "
+                    "FOR MEDICAL OR APPROVAL CLAIMS."
+                )
+                webpage_content = (
+                    "No readable webpage content was extracted. "
+                    "The HTML is retained only for date metadata."
+                )
+            elif full_content:
+                evidence_status = "READABLE WEBPAGE CONTENT AVAILABLE."
+                webpage_content = full_content
+            else:
+                evidence_status = (
+                    "SEARCH SNIPPET ONLY - FULL PAGE NOT EXTRACTED."
+                )
+                webpage_content = (
+                    "Not extracted. Do not treat the snippet alone "
+                    "as sufficient evidence for detailed medical claims."
+                )
+
             evidence_text.append(
                 f"""SOURCE_ID: {source_id}
+
+Evidence status:
+{evidence_status}
 
 Title:
 {result.get("title", "")}
@@ -772,7 +829,7 @@ Search snippet:
 {result.get("snippet", "")}
 
 Full webpage content:
-{result.get("full_content", "") or "Not extracted; use the search snippet only."}
+{webpage_content}
 """
             )
 
@@ -806,6 +863,22 @@ For every claim:
 
 Using ONLY the supplied search results, produce a structured
 research result.
+
+EVIDENCE STATUS RULES:
+
+- Sources marked "METADATA ONLY" contain no readable
+  webpage evidence. Never use them to support medical,
+  treatment, drug approval, or clinical claims.
+- Metadata-only sources may be used exclusively for
+  publication-date and update-date information.
+- Sources marked "SEARCH SNIPPET ONLY" provide limited
+  evidence. Do not use them alone to establish detailed
+  medical claims or confirm the latest approval.
+- Only use readable webpage content when it actually
+  supports the claim being made.
+- If no source provides sufficient readable evidence
+  for the research question, return no unsupported claims
+  and clearly explain the evidence limitation.
 
 Important:
 

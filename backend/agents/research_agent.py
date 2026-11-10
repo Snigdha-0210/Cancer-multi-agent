@@ -289,6 +289,58 @@ def extract_source_dates(content: str) -> tuple[str, str]:
             if publication_date and updated_date:
                 break
 
+    # ---------------------------------------------------------
+    # 3. Search visible webpage text for editorial dates
+    # ---------------------------------------------------------
+    # Remove HTML tags so dates inside HTML pages can also be found.
+    searchable_content = re.sub(
+        r"<[^>]+>",
+        " ",
+        content,
+    )
+
+    date_pattern = (
+        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4}"
+        r"|\d{4}-\d{2}-\d{2}"
+        r"|\d{1,2}/\d{1,2}/\d{4})"
+    )
+
+    # Extract update/review dates if metadata did not provide one.
+    if not updated_date:
+        updated_pattern = (
+            r"(?:^|[\n\r])\s*(?:[-*]\s*)?"
+            r"(?:\*{1,2})?"
+            r"(?:last\s+updated|last\s+reviewed|"
+            r"updated|reviewed|revised)"
+            r"\s*(?:\*{1,2})?\s*:?\s*(?:\*{1,2})?\s*"
+            + date_pattern
+        )
+        match = re.search(
+            updated_pattern,
+            searchable_content,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if match:
+            updated_date = match.group(1).strip()
+
+    # Extract publication dates if metadata did not provide one.
+    if not publication_date:
+        published_pattern = (
+            r"(?:^|[\n\r])\s*(?:[-*]\s*)?"
+            r"(?:\*{1,2})?"
+            r"(?:originally\s+published|"
+            r"publication\s+date|date\s+published|published)"
+            r"\s*(?:\*{1,2})?\s*:?\s*(?:\*{1,2})?\s*"
+            + date_pattern
+        )
+        match = re.search(
+            published_pattern,
+            searchable_content,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if match:
+            publication_date = match.group(1).strip()
+
     return publication_date, updated_date
 
 
@@ -299,7 +351,9 @@ def extract_webpage_with_retry(url: str, attempts: int = 3):
     for attempt in range(1, attempts + 1):
         try:
             result = extract_webpage(url)
-            if result.get("success") and result.get("content", "").strip():
+            if (
+                result.get("success") and result.get("content", "").strip()
+            ) or result.get("html", "").strip():
                 return result
             print(
                 f"Extraction attempt {attempt}/{attempts} "
@@ -512,7 +566,10 @@ def research_question(question: str) -> ResearchResult:
                         attempts=3,
                     )
 
-                    if notification_page.get("success"):
+                    if (
+                        notification_page.get("success")
+                        or notification_page.get("html", "").strip()
+                    ):
                         page_content = notification_page["content"]
                         # Extract FDA notification content relevant
                         # to the cancer type in the user's question.
@@ -649,9 +706,12 @@ def research_question(question: str) -> ResearchResult:
                 continue
 
             try:
-                extracted = extract_webpage(result["url"])
+                extracted = extract_webpage_with_retry(
+                    result["url"],
+                    attempts=3,
+                )
 
-                if extracted.get("success"):
+                if extracted.get("success") or extracted.get("html", "").strip():
                     page_content = extracted["content"]
                     result["html_content"] = extracted.get("html", "")
                     
@@ -681,7 +741,8 @@ def research_question(question: str) -> ResearchResult:
         for result in unique_results:
             metadata_content = (
                 result.get("html_content", "")
-                or result.get("full_content", "")
+                + "\n"
+                + result.get("full_content", "")
             )
             publication_date, updated_date = extract_source_dates(
                 metadata_content

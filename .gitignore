@@ -51,6 +51,7 @@ $RECYCLE.BIN/
 
 # Temporary files & logs
 *.bak
+*.backup
 *_backup.py
 *.log
 battery-report.html

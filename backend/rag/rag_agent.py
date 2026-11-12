@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.request
 
 from backend.rag.retriever import SemanticRetriever
@@ -57,32 +58,39 @@ IMPORTANT RULES:
 8. Do not prescribe treatment or medication.
 
 9. Every factual claim must have an immediately associated
-   citation identifying the document name and page number
-   that directly supports that specific claim.
+   citation using the exact citation ID provided in the
+   retrieved evidence, for example [FAC_1].
 
-10. Cite only sources that explicitly support the claim.
+10. A citation must identify the document and page that
+    directly support the specific claim.
+
+11. Never invent, modify, or guess citation IDs.
+    Only use citation IDs explicitly provided in the
+    retrieved evidence.
+
+12. Cite only sources that explicitly support the claim.
     Do not cite a source merely because it discusses the
     same general topic.
 
-11. If multiple retrieved sources support the same claim,
-    cite all relevant sources.
+13. If multiple retrieved sources support the same claim,
+    cite all relevant citation IDs.
 
-12. Never use one citation to imply that a source supports
+14. Never use one citation to imply that a source supports
     an entire list when it supports only some items.
+    Attach citations to the specific supported items.
 
-13. If a retrieved source supports only part of a claim,
-    cite it only for that supported part. Do not extend
-    its evidence to other claims.
+15. If a retrieved source supports only part of a claim,
+    cite it only for that supported part.
 
-14. If no retrieved source directly supports a factual
+16. If no retrieved source directly supports a factual
     claim, omit the claim or clearly state that the
     provided evidence does not establish it.
 
-15. If retrieved sources contain conflicting information,
+17. If retrieved sources contain conflicting information,
     explicitly mention the conflict rather than choosing
     information arbitrarily.
 
-16. Do not treat the similarity score as medical evidence.
+18. Do not treat the similarity score as medical evidence.
     It is only an indication of semantic relevance.
 
 Your response should contain:
@@ -130,41 +138,32 @@ def ask_ollama(prompt: str) -> str:
 
 def build_context(chunks: list[dict]) -> str:
     """
-    Convert retrieved chunks into a text context for the LLM.
+    Convert retrieved chunks into text context with stable
+    citation IDs for the RAG model.
     """
-
     context_parts = []
-
-    for index, chunk in enumerate(
-        chunks,
-        start=1,
-    ):
-
+    for index, chunk in enumerate(chunks, start=1):
+        citation_id = f"FAC_{index}"
         document = chunk.get(
             "document",
             "Unknown document",
         )
-
         page_start = chunk.get(
             "page_start",
             "Unknown",
         )
-
         page_end = chunk.get(
             "page_end",
             page_start,
         )
-
         section = chunk.get(
             "section",
             "Unknown section",
         )
-
         score = chunk.get(
             "score",
             0.0,
         )
-
         text = chunk.get(
             "text",
             "",
@@ -172,8 +171,9 @@ def build_context(chunks: list[dict]) -> str:
 
         context_parts.append(
             f"""
---- SOURCE {index} ---
+--- SOURCE {index} [{citation_id}] ---
 
+Citation ID: {citation_id}
 Document: {document}
 Pages: {page_start}-{page_end}
 Section: {section}
@@ -185,6 +185,71 @@ Text:
         )
 
     return "\n".join(context_parts)
+
+
+# ============================================================
+# CITATION VALIDATION
+# ============================================================
+
+def validate_faculty_citations(
+    answer: str,
+    retrieved_chunks: list[dict],
+) -> dict:
+    """
+    Validate FAC citation IDs against the retrieved chunks.
+    Returns valid citation IDs, invalid citation IDs,
+    and the sources actually cited in the answer.
+    """
+
+    # Build the set of citation IDs that really exist.
+    valid_ids = {
+        f"FAC_{index}"
+        for index in range(1, len(retrieved_chunks) + 1)
+    }
+
+    # Find all FAC citations used by the generated answer.
+    found_ids = re.findall(
+        r"\[FAC_\d+\]",
+        answer,
+    )
+
+    # Remove duplicates while preserving their order.
+    found_ids = list(dict.fromkeys(found_ids))
+
+    # Remove square brackets to compare citation IDs.
+    cited_ids = [
+        citation.strip("[]")
+        for citation in found_ids
+    ]
+
+    # Separate valid and invalid citation IDs.
+    valid_citations = [
+        cid
+        for cid in cited_ids
+        if cid in valid_ids
+    ]
+
+    invalid_citations = [
+        cid
+        for cid in cited_ids
+        if cid not in valid_ids
+    ]
+
+    # Build the list of sources actually cited in the answer.
+    cited_sources = []
+    for cid in valid_citations:
+        try:
+            index = int(cid.split("_")[1]) - 1
+            if 0 <= index < len(retrieved_chunks):
+                cited_sources.append(retrieved_chunks[index])
+        except (IndexError, ValueError):
+            continue
+
+    return {
+        "valid_ids": valid_citations,
+        "invalid_ids": invalid_citations,
+        "cited_sources": cited_sources,
+    }
 
 
 # ============================================================

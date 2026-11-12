@@ -347,10 +347,30 @@ RETRIEVED FACULTY EVIDENCE:
 {context}
 
 
-Using ONLY the retrieved faculty evidence, answer the user's
-question according to your system instructions.
+STRICT CITATION REQUIREMENTS:
 
-Do not add medical facts from outside the retrieved evidence.
+1. Every factual statement in your answer MUST have
+   an inline citation.
+
+2. Use the exact citation IDs shown in the retrieved
+   evidence, including their square brackets.
+
+3. Place the citation immediately at the end of the
+   sentence or bullet it supports.
+
+4. A citation in the Sources section does NOT replace
+   an inline citation.
+
+5. Never list a source unless you have cited it inline
+   to support a factual statement.
+
+6. Do not invent citation IDs.
+
+7. Only cite a source when its actual text supports
+   the specific statement.
+
+8. If one source supports several statements, you may
+   cite it for each supported statement.
 """
 
     # --------------------------------------------------------
@@ -396,6 +416,32 @@ Do not add medical facts from outside the retrieved evidence.
         )
 
     # --------------------------------------------------------
+    # Validate generated faculty citations
+    # --------------------------------------------------------
+
+    citation_validation = validate_faculty_citations(
+        answer,
+        retrieved_chunks,
+    )
+
+    print()
+    print("=" * 70)
+    print("CITATION VALIDATION")
+    print("=" * 70)
+    print(
+        "Valid citations:",
+        citation_validation["valid_ids"],
+    )
+    print(
+        "Invalid citations:",
+        citation_validation["invalid_ids"],
+    )
+    print(
+        "Number of cited sources:",
+        len(citation_validation["cited_sources"]),
+    )
+
+    # --------------------------------------------------------
     # Build source list
     # --------------------------------------------------------
 
@@ -438,6 +484,7 @@ Do not add medical facts from outside the retrieved evidence.
         "answer": answer,
         "sources": sources,
         "retrieved_chunks": retrieved_chunks,
+        "citation_validation": citation_validation,
     }
 
 
